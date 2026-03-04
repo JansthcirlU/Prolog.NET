@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Prolog.NET.Actors/Prolog.NET.Actors.csproj" />
+  </Folder>
+</Solution>
