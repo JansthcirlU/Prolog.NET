@@ -17,7 +17,10 @@ Prolog.NET.Swipl.Generated
 Generated
 
 --methodClassName
-NativeMethods
+SwiPrologNative
+
+--with-access-specifier
+*=Internal
 
 --libraryPath
 swipl

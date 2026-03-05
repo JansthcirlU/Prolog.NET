@@ -1,6 +1,6 @@
 namespace Prolog.NET.Swipl.Generated;
 
-public unsafe partial struct PL_option_t
+internal unsafe partial struct PL_option_t
 {
     [NativeTypeName("atom_t")]
     public nuint name;

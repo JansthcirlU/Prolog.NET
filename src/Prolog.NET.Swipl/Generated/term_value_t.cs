@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 namespace Prolog.NET.Swipl.Generated;
 
 [StructLayout(LayoutKind.Explicit)]
-public unsafe partial struct term_value_t
+internal unsafe partial struct term_value_t
 {
     [FieldOffset(0)]
     [NativeTypeName("int64_t")]
@@ -24,7 +24,7 @@ public unsafe partial struct term_value_t
     [NativeTypeName("__AnonymousRecord_SWI-Prolog_L217_C3")]
     public _t_e__Struct t;
 
-    public partial struct _t_e__Struct
+    internal partial struct _t_e__Struct
     {
         [NativeTypeName("atom_t")]
         public nuint name;

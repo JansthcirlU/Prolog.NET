@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 
 namespace Prolog.NET.Swipl.Generated;
 
-public partial struct xpceref_t
+internal partial struct xpceref_t
 {
     public int type;
 
@@ -10,7 +10,7 @@ public partial struct xpceref_t
     public _value_e__Union value;
 
     [StructLayout(LayoutKind.Explicit)]
-    public partial struct _value_e__Union
+    internal partial struct _value_e__Union
     {
         [FieldOffset(0)]
         [NativeTypeName("uintptr_t")]

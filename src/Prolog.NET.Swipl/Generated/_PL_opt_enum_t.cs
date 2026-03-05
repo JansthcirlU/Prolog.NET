@@ -1,6 +1,6 @@
 namespace Prolog.NET.Swipl.Generated;
 
-public enum _PL_opt_enum_t
+internal enum _PL_opt_enum_t
 {
     _OPT_END = -1,
     OPT_BOOL = 0,

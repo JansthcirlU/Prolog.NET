@@ -1,6 +1,6 @@
 namespace Prolog.NET.Swipl.Generated;
 
-public unsafe partial struct pl_sigaction
+internal unsafe partial struct pl_sigaction
 {
     [NativeTypeName("void (*)(int)")]
     public delegate* unmanaged[Cdecl]<int, void> sa_cfunction;

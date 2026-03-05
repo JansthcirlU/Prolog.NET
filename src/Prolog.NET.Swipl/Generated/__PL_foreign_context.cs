@@ -1,5 +1,5 @@
 namespace Prolog.NET.Swipl.Generated;
 
-public partial struct __PL_foreign_context
+internal partial struct __PL_foreign_context
 {
 }

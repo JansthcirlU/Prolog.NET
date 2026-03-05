@@ -1,6 +1,6 @@
 namespace Prolog.NET.Swipl.Generated;
 
-public unsafe partial struct PL_prof_type_t
+internal unsafe partial struct PL_prof_type_t
 {
     [NativeTypeName("int (*)(term_t, void *)")]
     public delegate* unmanaged[Cdecl]<nuint, void*, int> unify;

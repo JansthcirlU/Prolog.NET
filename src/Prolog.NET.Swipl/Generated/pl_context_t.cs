@@ -1,6 +1,6 @@
 namespace Prolog.NET.Swipl.Generated;
 
-public unsafe partial struct pl_context_t
+internal unsafe partial struct pl_context_t
 {
     [NativeTypeName("PL_engine_t")]
     public __PL_PL_local_data* ld;
@@ -17,11 +17,11 @@ public unsafe partial struct pl_context_t
     [NativeTypeName("void *[10]")]
     public _reserved_e__FixedBuffer reserved;
 
-    public partial struct __PL_queryFrame
+    internal partial struct __PL_queryFrame
     {
     }
 
-    public partial struct __PL_localFrame
+    internal partial struct __PL_localFrame
     {
     }
 

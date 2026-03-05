@@ -1,6 +1,6 @@
 namespace Prolog.NET.Swipl.Generated;
 
-public unsafe partial struct PL_thread_attr_t
+internal unsafe partial struct PL_thread_attr_t
 {
     [NativeTypeName("size_t")]
     public nuint stack_limit;

@@ -1,6 +1,6 @@
 namespace Prolog.NET.Swipl.Generated;
 
-public unsafe partial struct PL_blob_t
+internal unsafe partial struct PL_blob_t
 {
     [NativeTypeName("uintptr_t")]
     public nuint magic;
