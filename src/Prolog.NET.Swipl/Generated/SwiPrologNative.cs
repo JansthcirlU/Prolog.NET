@@ -312,7 +312,7 @@ internal static unsafe partial class SwiPrologNative
 
     [LibraryImport("swipl")]
     [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
-    public static partial int PL_get_long([NativeTypeName("term_t")] nuint t, [NativeTypeName("long *")] int* i);
+    public static partial int PL_get_long([NativeTypeName("term_t")] nuint t, [NativeTypeName("long *")] CLong* i);
 
     [LibraryImport("swipl")]
     [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
@@ -505,7 +505,7 @@ internal static unsafe partial class SwiPrologNative
 
     [LibraryImport("swipl")]
     [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
-    public static partial int PL_put_integer([NativeTypeName("term_t")] nuint t, [NativeTypeName("long")] int i);
+    public static partial int PL_put_integer([NativeTypeName("term_t")] nuint t, [NativeTypeName("long")] CLong i);
 
     [LibraryImport("swipl")]
     [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
@@ -696,7 +696,7 @@ internal static unsafe partial class SwiPrologNative
 
     [LibraryImport("swipl")]
     [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
-    public static partial int PL_get_long_ex([NativeTypeName("term_t")] nuint t, [NativeTypeName("long *")] int* i);
+    public static partial int PL_get_long_ex([NativeTypeName("term_t")] nuint t, [NativeTypeName("long *")] CLong* i);
 
     [LibraryImport("swipl")]
     [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
@@ -869,11 +869,11 @@ internal static unsafe partial class SwiPrologNative
 
     [LibraryImport("swipl")]
     [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
-    public static partial int PL_cvt_i_long([NativeTypeName("term_t")] nuint p, [NativeTypeName("long *")] int* c);
+    public static partial int PL_cvt_i_long([NativeTypeName("term_t")] nuint p, [NativeTypeName("long *")] CLong* c);
 
     [LibraryImport("swipl")]
     [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
-    public static partial int PL_cvt_i_ulong([NativeTypeName("term_t")] nuint p, [NativeTypeName("unsigned long *")] uint* c);
+    public static partial int PL_cvt_i_ulong([NativeTypeName("term_t")] nuint p, [NativeTypeName("unsigned long *")] CULong* c);
 
     [LibraryImport("swipl")]
     [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
