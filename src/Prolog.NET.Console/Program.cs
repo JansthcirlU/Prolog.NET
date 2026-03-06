@@ -1,2 +1,13 @@
-﻿// See https://aka.ms/new-console-template for more information
-Console.WriteLine("Hello, World!");
+using Microsoft.Extensions.Hosting;
+using Prolog.NET.Swipl;
+using Prolog.NET.Actors;
+using Prolog.NET.Console;
+
+HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
+
+builder.Services
+    .AddPrologEngine()
+    .AddPrologActors()
+    .AddHostedService<PrologWorker>();
+
+await builder.Build().RunAsync();
