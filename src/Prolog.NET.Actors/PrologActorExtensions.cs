@@ -16,9 +16,7 @@ public static class PrologActorExtensions
     /// service so Proto.Actor can resolve and inject it per spawn.
     /// </summary>
     public static IServiceCollection AddPrologActors(this IServiceCollection services)
-    {
-        services.AddSingleton(sp => new ActorSystem().WithServiceProvider(sp));
-        services.AddTransient<PrologActor>();
-        return services;
-    }
+        => services
+            .AddSingleton(sp => new ActorSystem().WithServiceProvider(sp))
+            .AddTransient<PrologActor>();
 }
