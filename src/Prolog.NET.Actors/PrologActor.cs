@@ -16,8 +16,9 @@ namespace Prolog.NET.Actors;
 /// <para>
 /// Exceptions from the Prolog engine are caught per-handler and returned as error responses
 /// (<see cref="CallResult.ErrorMessage"/> / <see cref="QueryResult.ErrorMessage"/> /
-/// <see cref="QueryErrorMessage"/>) rather than propagating — this prevents Proto.Actor's
-/// supervisor restart strategy from firing and ensures callers always receive a reply.
+/// <see cref="OpenQueryFailedResult"/> / <see cref="QueryFailedResult"/>) rather than
+/// propagating — this prevents Proto.Actor's supervisor restart strategy from firing and
+/// ensures callers always receive a reply.
 /// </para>
 /// </remarks>
 public class PrologActor(PrologEngine engine) : IActor
