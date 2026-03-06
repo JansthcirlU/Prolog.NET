@@ -8,7 +8,7 @@ namespace Prolog.NET.Console;
 
 /// <summary>
 /// A hosted background service that spawns a <see cref="PrologActor"/> and demonstrates
-/// basic request-reply interaction with the Prolog engine.
+/// the raw lazy-streaming protocol with contextual command hints at each step.
 /// </summary>
 public sealed class PrologWorker(
     ActorSystem actorSystem,
@@ -21,23 +21,81 @@ public sealed class PrologWorker(
     {
         Props props = Props.FromProducer(serviceProvider.GetRequiredService<PrologActor>);
         _pid = actorSystem.Root.Spawn(props);
-        logger.LogInformation("PrologActor started with PID {Pid}", _pid);
+        logger.LogInformation(
+            "PrologActor started — try: CallMessage | LoadFileMessage | OpenQueryMessage");
 
         // Assert a fact
+        logger.LogInformation("Asserting likes(bob, alice)...");
         CallResult assertResult = await actorSystem.Root.RequestAsync<CallResult>(
             _pid, new CallMessage("assert(likes(bob, alice))"), stoppingToken);
 
         if (!assertResult.Success)
         {
             logger.LogError("assert failed: {Error}", assertResult.ErrorMessage);
+            return;
         }
 
-        // Query it back (lazy streaming)
-        await foreach (IReadOnlyDictionary<string, string> solution in actorSystem.Root.QueryAsync(_pid, "likes(bob, X)", stoppingToken))
+        logger.LogInformation("assert succeeded — try: CallMessage | OpenQueryMessage");
+
+        // Open a streaming query
+        const string goal = "likes(bob, X)";
+        logger.LogInformation("Opening query: {Goal}", goal);
+
+        OpenQueryResult opened = await actorSystem.Root.RequestAsync<OpenQueryResult>(
+            _pid, new OpenQueryMessage(goal), stoppingToken);
+
+        if (opened is OpenQueryFailedResult openFailed)
         {
-            logger.LogInformation("Solution: X = {X}", solution["X"]);
+            logger.LogError("OpenQuery failed: {Error}", openFailed.Error);
+            return;
         }
 
+        Guid queryId = ((QueryOpenedResult)opened).QueryId;
+        logger.LogInformation(
+            "Query opened (id: {QueryId}) — send NextSolutionMessage to fetch first solution",
+            queryId);
+
+        // Pull solutions one at a time
+        while (true)
+        {
+            NextSolutionResult next = await actorSystem.Root.RequestAsync<NextSolutionResult>(
+                _pid, new NextSolutionMessage(queryId), stoppingToken);
+
+            switch (next)
+            {
+                case SolutionResult sol:
+                    string solVars = FormatVariables(sol.Variables);
+                    logger.LogInformation("Solution: {Vars}  [more may follow]", solVars);
+                    logger.LogInformation(
+                        "  → open query {QueryId} — send NextSolutionMessage or CloseQueryMessage",
+                        queryId);
+                    break;
+
+                case FinalSolutionResult final:
+                    string finalVars = FormatVariables(final.Variables);
+                    logger.LogInformation(
+                        "Solution: {Vars}  [FinalSolution — query closed automatically]",
+                        finalVars);
+                    logger.LogInformation(
+                        "  → no open query — try: OpenQueryMessage | CallMessage");
+                    goto done;
+
+                case NoMoreSolutionsResult:
+                    logger.LogInformation("No more solutions — query closed automatically");
+                    logger.LogInformation(
+                        "  → no open query — try: OpenQueryMessage | CallMessage");
+                    goto done;
+
+                case QueryFailedResult failed:
+                    logger.LogError(
+                        "Query error: {Error} — query closed automatically", failed.Error);
+                    logger.LogInformation(
+                        "  → no open query — try: OpenQueryMessage | CallMessage");
+                    goto done;
+            }
+        }
+
+        done:
         // Keep the service running until Ctrl+C
         await Task.Delay(Timeout.Infinite, stoppingToken);
     }
@@ -50,5 +108,10 @@ public sealed class PrologWorker(
         }
 
         await base.StopAsync(cancellationToken);
+    }
+
+    private static string FormatVariables(IReadOnlyDictionary<string, string> variables)
+    {
+        return string.Join(", ", variables.Select(kv => $"{kv.Key} = {kv.Value}"));
     }
 }

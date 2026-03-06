@@ -13,13 +13,13 @@ public sealed record QueryMessage(string Goal);
 
 // --- Lazy streaming inbound ---
 
-/// <summary>Opens a lazy streaming query; the actor responds with <see cref="QueryOpenedMessage"/> or <see cref="QueryErrorMessage"/>.</summary>
+/// <summary>Opens a lazy streaming query; the actor responds with an <see cref="OpenQueryResult"/>.</summary>
 public sealed record OpenQueryMessage(string Goal);
 
-/// <summary>Requests the next solution for an open query.</summary>
+/// <summary>Requests the next solution for an open query; the actor responds with a <see cref="NextSolutionResult"/>.</summary>
 public sealed record NextSolutionMessage(Guid QueryId);
 
-/// <summary>Closes an open query without waiting for a reply.</summary>
+/// <summary>Closes an open query early (mid-stream cancellation). No reply is sent.</summary>
 public sealed record CloseQueryMessage(Guid QueryId);
 
 // --- Responses ---
@@ -39,14 +39,38 @@ public sealed record QueryResult(
 
 // --- Lazy streaming responses ---
 
-/// <summary>Sent by the actor after successfully opening a streaming query.</summary>
-public sealed record QueryOpenedMessage(Guid QueryId);
+/// <summary>Discriminated union returned in response to <see cref="OpenQueryMessage"/>.</summary>
+public abstract record OpenQueryResult;
 
-/// <summary>One solution from a streaming query.</summary>
-public sealed record SolutionMessage(IReadOnlyDictionary<string, string> Variables);
+/// <summary>The query was opened successfully. Use <see cref="QueryId"/> in subsequent <see cref="NextSolutionMessage"/> calls.</summary>
+public sealed record QueryOpenedResult(Guid QueryId) : OpenQueryResult;
 
-/// <summary>Sent by the actor when a streaming query has no more solutions.</summary>
-public sealed record QueryEndMessage;
+/// <summary>The query could not be opened (e.g. parse error or Prolog exception).</summary>
+public sealed record OpenQueryFailedResult(string Error) : OpenQueryResult;
 
-/// <summary>Sent by the actor when a streaming query encounters a Prolog-level error.</summary>
-public sealed record QueryErrorMessage(string Error);
+/// <summary>Discriminated union returned in response to <see cref="NextSolutionMessage"/>.</summary>
+public abstract record NextSolutionResult;
+
+/// <summary>
+/// A solution was found and the query is still open.
+/// Send another <see cref="NextSolutionMessage"/> to continue or <see cref="CloseQueryMessage"/> to cancel.
+/// </summary>
+public sealed record SolutionResult(IReadOnlyDictionary<string, string> Variables) : NextSolutionResult;
+
+/// <summary>
+/// The last solution (<c>PL_S_LAST</c>). The actor has already closed the query —
+/// do <em>not</em> send <see cref="CloseQueryMessage"/>.
+/// </summary>
+public sealed record FinalSolutionResult(IReadOnlyDictionary<string, string> Variables) : NextSolutionResult;
+
+/// <summary>
+/// No more solutions (<c>PL_S_FALSE</c>). The actor has already closed the query —
+/// do <em>not</em> send <see cref="CloseQueryMessage"/>.
+/// </summary>
+public sealed record NoMoreSolutionsResult : NextSolutionResult;
+
+/// <summary>
+/// A Prolog-level exception was raised. The actor has already closed the query —
+/// do <em>not</em> send <see cref="CloseQueryMessage"/>.
+/// </summary>
+public sealed record QueryFailedResult(string Error) : NextSolutionResult;

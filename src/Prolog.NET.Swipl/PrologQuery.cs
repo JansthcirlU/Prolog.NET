@@ -28,6 +28,13 @@ public sealed class PrologQuery : IDisposable
     private bool _queryClosed;
 
     /// <summary>
+    /// <see langword="true"/> after <see cref="Next"/> returns <see langword="true"/> and the
+    /// native engine signalled <c>PL_S_LAST</c> — meaning this was the final solution and no
+    /// further call to <see cref="Next"/> is needed (the query is already exhausted).
+    /// </summary>
+    public bool IsLastSolution { get; private set; }
+
+    /// <summary>
     /// The current solution after a successful call to <see cref="Next"/>.
     /// <see langword="null"/> before the first call or after the query is exhausted.
     /// </summary>
@@ -182,7 +189,13 @@ public sealed class PrologQuery : IDisposable
         switch (rc)
         {
             case PrologNativeConstants.PL_S_TRUE:
+                IsLastSolution = false;
+                Current = new PrologSolution(_variables);
+                return true;
+
             case PrologNativeConstants.PL_S_LAST:
+                IsLastSolution = true;
+                _queryClosed = true;
                 Current = new PrologSolution(_variables);
                 return true;
 

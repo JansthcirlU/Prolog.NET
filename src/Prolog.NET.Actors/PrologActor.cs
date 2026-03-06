@@ -109,11 +109,11 @@ public class PrologActor(PrologEngine engine) : IActor
             PrologQuery query = engine.OpenQuery(msg.Goal);
             Guid id = Guid.NewGuid();
             _openQueries[id] = query;
-            context.Respond(new QueryOpenedMessage(id));
+            context.Respond(new QueryOpenedResult(id));
         }
         catch (PrologException ex)
         {
-            context.Respond(new QueryErrorMessage(ex.PrologMessage ?? ex.Message));
+            context.Respond(new OpenQueryFailedResult(ex.PrologMessage ?? ex.Message));
         }
     }
 
@@ -121,7 +121,7 @@ public class PrologActor(PrologEngine engine) : IActor
     {
         if (!_openQueries.TryGetValue(msg.QueryId, out PrologQuery? query))
         {
-            context.Respond(new QueryEndMessage());
+            context.Respond(new NoMoreSolutionsResult());
             return;
         }
 
@@ -131,20 +131,30 @@ public class PrologActor(PrologEngine engine) : IActor
             {
                 Dictionary<string, string> vars = query.Current!.VariableNames
                     .ToDictionary(name => name, name => query.Current[name].ToString());
-                context.Respond(new SolutionMessage(vars));
+
+                if (query.IsLastSolution)
+                {
+                    _openQueries.Remove(msg.QueryId);
+                    query.Dispose();
+                    context.Respond(new FinalSolutionResult(vars));
+                }
+                else
+                {
+                    context.Respond(new SolutionResult(vars));
+                }
             }
             else
             {
                 _openQueries.Remove(msg.QueryId);
                 query.Dispose();
-                context.Respond(new QueryEndMessage());
+                context.Respond(new NoMoreSolutionsResult());
             }
         }
         catch (PrologException ex)
         {
             _openQueries.Remove(msg.QueryId);
             query.Dispose();
-            context.Respond(new QueryErrorMessage(ex.PrologMessage ?? ex.Message));
+            context.Respond(new QueryFailedResult(ex.PrologMessage ?? ex.Message));
         }
     }
 
