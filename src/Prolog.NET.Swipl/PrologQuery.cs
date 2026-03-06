@@ -42,7 +42,9 @@ public sealed class PrologQuery : IDisposable
         get
         {
             while (Next())
+            {
                 yield return Current!;
+            }
         }
     }
 
@@ -74,16 +76,18 @@ public sealed class PrologQuery : IDisposable
         fixed (byte* atomToTermName = "atom_to_term\0"u8)
         fixed (byte* systemModule = "system\0"u8)
         {
-            var parseProc = SwiPrologNative.PL_predicate(
+            __PL_procedure* parseProc = SwiPrologNative.PL_predicate(
                 (sbyte*)atomToTermName, 3, (sbyte*)systemModule);
 
             // args+0 = input atom, args+1 = output Term, args+2 = output Bindings
             nuint parseArgs = SwiPrologNative.PL_new_term_refs(3);
 
             if (SwiPrologNative.PL_put_atom_chars(parseArgs, (sbyte*)goalPtr) == 0)
+            {
                 throw new PrologException($"Failed to create atom from goal: {goal}");
+            }
 
-            var parseQid = SwiPrologNative.PL_open_query(
+            __PL_queryRef* parseQid = SwiPrologNative.PL_open_query(
                 null,
                 PrologNativeConstants.PL_Q_CATCH_EXCEPTION | PrologNativeConstants.PL_Q_EXT_STATUS,
                 parseProc,
@@ -93,7 +97,9 @@ public sealed class PrologQuery : IDisposable
             SwiPrologNative.PL_close_query(parseQid);
 
             if (parseRc == PrologNativeConstants.PL_S_EXCEPTION || parseRc == PrologNativeConstants.PL_S_FALSE)
+            {
                 throw new PrologException($"Failed to parse Prolog goal: {goal}");
+            }
 
             // 3. Walk the Bindings list: ['VarName'=VarRef, ...]
             //    args+1 = parsed Term, args+2 = Bindings list
@@ -130,15 +136,17 @@ public sealed class PrologQuery : IDisposable
             nuint callArg = SwiPrologNative.PL_new_term_refs(1);
 
             if (SwiPrologNative.PL_put_term(callArg, goalTerm) == 0)
+            {
                 throw new PrologException("Failed to prepare goal term for execution");
+            }
 
             fixed (byte* callName = "call\0"u8)
             fixed (byte* userModule = "user\0"u8)
             {
-                var callProc = SwiPrologNative.PL_predicate(
+                __PL_procedure* callProc = SwiPrologNative.PL_predicate(
                     (sbyte*)callName, 1, (sbyte*)userModule);
 
-                var queryRef = SwiPrologNative.PL_open_query(
+                __PL_queryRef* queryRef = SwiPrologNative.PL_open_query(
                     null,
                     PrologNativeConstants.PL_Q_CATCH_EXCEPTION | PrologNativeConstants.PL_Q_EXT_STATUS,
                     callProc,
@@ -164,9 +172,11 @@ public sealed class PrologQuery : IDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
 
         if (_queryClosed)
+        {
             return false;
+        }
 
-        var queryRef = (Generated.__PL_queryRef*)_queryRefPtr;
+        __PL_queryRef* queryRef = (Generated.__PL_queryRef*)_queryRefPtr;
         int rc = SwiPrologNative.PL_next_solution(queryRef);
 
         switch (rc)
@@ -199,7 +209,9 @@ public sealed class PrologQuery : IDisposable
     {
         nuint exTerm = SwiPrologNative.PL_exception(queryRef);
         if (exTerm == 0)
+        {
             return null;
+        }
 
         // Convert exception term to string using term_to_atom/2 in a sub-frame.
         nuint frame = SwiPrologNative.PL_open_foreign_frame();
@@ -208,13 +220,15 @@ public sealed class PrologQuery : IDisposable
             fixed (byte* name = "term_to_atom\0"u8)
             fixed (byte* module = "system\0"u8)
             {
-                var pred = SwiPrologNative.PL_predicate((sbyte*)name, 2, (sbyte*)module);
+                __PL_procedure* pred = SwiPrologNative.PL_predicate((sbyte*)name, 2, (sbyte*)module);
                 nuint convArgs = SwiPrologNative.PL_new_term_refs(2);
 
                 if (SwiPrologNative.PL_put_term(convArgs, exTerm) == 0)
+                {
                     return null;
+                }
 
-                var convQid = SwiPrologNative.PL_open_query(
+                __PL_queryRef* convQid = SwiPrologNative.PL_open_query(
                     null,
                     PrologNativeConstants.PL_Q_NODEBUG | PrologNativeConstants.PL_Q_CATCH_EXCEPTION,
                     pred,
@@ -226,7 +240,9 @@ public sealed class PrologQuery : IDisposable
                     {
                         sbyte* atomChars;
                         if (SwiPrologNative.PL_get_atom_chars(convArgs + 1, &atomChars) != 0)
+                        {
                             return Marshal.PtrToStringUTF8((nint)atomChars);
+                        }
                     }
                 }
                 finally
@@ -247,13 +263,15 @@ public sealed class PrologQuery : IDisposable
     public unsafe void Dispose()
     {
         if (_disposed)
+        {
             return;
+        }
 
         _disposed = true;
 
         if (!_queryClosed && _queryRefPtr != 0)
         {
-            var queryRef = (Generated.__PL_queryRef*)_queryRefPtr;
+            __PL_queryRef* queryRef = (Generated.__PL_queryRef*)_queryRefPtr;
             SwiPrologNative.PL_close_query(queryRef);
         }
 

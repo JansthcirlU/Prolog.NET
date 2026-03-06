@@ -58,8 +58,10 @@ public sealed class PrologEngine : IDisposable
         lock (_lock)
         {
             if (_instance is { _disposed: false })
+            {
                 throw new InvalidOperationException(
                     "The Prolog engine is already initialized. Dispose the existing instance first.");
+            }
 
             // If already initialized externally (e.g. host process), wrap without re-init.
             if (IsInitialized)
@@ -86,20 +88,29 @@ public sealed class PrologEngine : IDisposable
         try
         {
             for (int i = 0; i < fullArgs.Length; i++)
+            {
                 nativePtrs[i] = Marshal.StringToCoTaskMemUTF8(fullArgs[i]);
+            }
 
             fixed (nint* ptrArray = nativePtrs)
             {
                 int rc = SwiPrologNative.PL_initialise(fullArgs.Length, (sbyte**)ptrArray);
                 if (rc == 0)
+                {
                     throw new PrologException("Failed to initialize SWI-Prolog engine. " +
                         "Ensure the SWI-Prolog runtime (swipl.dll / libswipl) is on the path.");
+                }
             }
         }
         finally
         {
             foreach (nint ptr in nativePtrs)
-                if (ptr != 0) Marshal.FreeCoTaskMem(ptr);
+            {
+                if (ptr != 0)
+                {
+                    Marshal.FreeCoTaskMem(ptr);
+                }
+            }
         }
     }
 
@@ -113,7 +124,9 @@ public sealed class PrologEngine : IDisposable
         ThrowIfDisposed();
         string escaped = EscapeSingleQuotes(path);
         if (!Call($"consult('{escaped}')"))
+        {
             throw new PrologException($"consult/1 failed for: {path}");
+        }
     }
 
     /// <summary>
@@ -139,7 +152,9 @@ public sealed class PrologEngine : IDisposable
                 nuint termRef = SwiPrologNative.PL_new_term_ref();
 
                 if (SwiPrologNative.PL_chars_to_term((sbyte*)goalPtr, termRef) == 0)
+                {
                     throw new PrologException($"Failed to parse Prolog goal: {goal}");
+                }
 
                 int rc = SwiPrologNative.PL_call(termRef, null);
 
@@ -185,7 +200,9 @@ public sealed class PrologEngine : IDisposable
         lock (_lock)
         {
             if (_disposed)
+            {
                 return;
+            }
 
             _disposed = true;
             _instance = null;
@@ -210,13 +227,15 @@ public sealed class PrologEngine : IDisposable
             fixed (byte* name = "term_to_atom\0"u8)
             fixed (byte* module = "system\0"u8)
             {
-                var pred = SwiPrologNative.PL_predicate((sbyte*)name, 2, (sbyte*)module);
+                __PL_procedure* pred = SwiPrologNative.PL_predicate((sbyte*)name, 2, (sbyte*)module);
                 nuint args = SwiPrologNative.PL_new_term_refs(2);
 
                 if (SwiPrologNative.PL_put_term(args, termRef) == 0)
+                {
                     return null;
+                }
 
-                var qid = SwiPrologNative.PL_open_query(
+                __PL_queryRef* qid = SwiPrologNative.PL_open_query(
                     null,
                     PrologNativeConstants.PL_Q_NODEBUG | PrologNativeConstants.PL_Q_CATCH_EXCEPTION,
                     pred,
@@ -228,7 +247,9 @@ public sealed class PrologEngine : IDisposable
                     {
                         sbyte* chars;
                         if (SwiPrologNative.PL_get_atom_chars(args + 1, &chars) != 0)
+                        {
                             return Marshal.PtrToStringUTF8((nint)chars);
+                        }
                     }
                 }
                 finally

@@ -64,7 +64,10 @@ public sealed class PrologTerm
         {
             sbyte* chars;
             if (SwiPrologNative.PL_get_atom_chars(_termRef, &chars) == 0)
+            {
                 throw new PrologException("Term is not an atom");
+            }
+
             return Marshal.PtrToStringUTF8((nint)chars)
                 ?? throw new PrologException("Failed to marshal atom string");
         }
@@ -80,7 +83,10 @@ public sealed class PrologTerm
         {
             long value;
             if (SwiPrologNative.PL_get_int64(_termRef, &value) == 0)
+            {
                 throw new PrologException("Term is not an integer");
+            }
+
             return value;
         }
     }
@@ -95,7 +101,10 @@ public sealed class PrologTerm
         {
             double value;
             if (SwiPrologNative.PL_get_float(_termRef, &value) == 0)
+            {
                 throw new PrologException("Term is not a float");
+            }
+
             return value;
         }
     }
@@ -111,14 +120,16 @@ public sealed class PrologTerm
             fixed (byte* name = "term_to_atom\0"u8)
             fixed (byte* module = "system\0"u8)
             {
-                var pred = SwiPrologNative.PL_predicate((sbyte*)name, 2, (sbyte*)module);
+                __PL_procedure* pred = SwiPrologNative.PL_predicate((sbyte*)name, 2, (sbyte*)module);
                 nuint args = SwiPrologNative.PL_new_term_refs(2);
 
                 // args+0 = input Term, args+1 = output Atom
                 if (SwiPrologNative.PL_put_term(args, _termRef) == 0)
+                {
                     return "<term>";
+                }
 
-                var qid = SwiPrologNative.PL_open_query(
+                __PL_queryRef* qid = SwiPrologNative.PL_open_query(
                     null,
                     PrologNativeConstants.PL_Q_CATCH_EXCEPTION,
                     pred,
@@ -128,12 +139,16 @@ public sealed class PrologTerm
                 {
                     int rc = SwiPrologNative.PL_next_solution(qid);
                     if (rc == 0)
+                    {
                         return "<term>";
+                    }
 
                     sbyte* atomChars;
                     nuint atomRef = args + 1;
                     if (SwiPrologNative.PL_get_atom_chars(atomRef, &atomChars) == 0)
+                    {
                         return "<term>";
+                    }
 
                     return Marshal.PtrToStringUTF8((nint)atomChars) ?? "<term>";
                 }

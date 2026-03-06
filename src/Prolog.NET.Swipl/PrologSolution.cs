@@ -38,9 +38,11 @@ public sealed class PrologSolution
         get
         {
             if (!_variables.TryGetValue(variableName, out nuint termRef))
+            {
                 throw new KeyNotFoundException(
                     $"Variable '{variableName}' is not present in this query. " +
                     $"Available variables: {string.Join(", ", _variables.Keys)}");
+            }
 
             return new PrologTerm(termRef);
         }

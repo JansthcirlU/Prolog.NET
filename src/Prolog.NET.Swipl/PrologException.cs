@@ -12,7 +12,7 @@ public sealed class PrologException : Exception
     /// </summary>
     public string? PrologMessage { get; }
 
-    internal PrologException(string message, string? prologMessage = null)
+    public PrologException(string message, string? prologMessage = null)
         : base(prologMessage is not null ? $"{message}: {prologMessage}" : message)
     {
         PrologMessage = prologMessage;
