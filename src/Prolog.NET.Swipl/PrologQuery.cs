@@ -22,7 +22,7 @@ public sealed class PrologQuery : IDisposable
     private nint _queryRefPtr;
 
     // Maps Prolog variable names to their term_t handles.
-    private readonly Dictionary<string, nuint> _variables = new();
+    private readonly Dictionary<string, nuint> _variables = [];
 
     private bool _disposed;
     private bool _queryClosed;
