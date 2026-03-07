@@ -1,6 +1,9 @@
 using Microsoft.Extensions.DependencyInjection;
 using Proto;
 using Proto.DependencyInjection;
+using Proto.Remote;
+using Proto.Remote.GrpcNet;
+using static Proto.Remote.RemoteConfig;
 
 namespace Prolog.NET.Actors;
 
@@ -11,12 +14,28 @@ namespace Prolog.NET.Actors;
 public static class PrologActorExtensions
 {
     /// <summary>
-    /// Registers the Proto.Actor <see cref="ActorSystem"/> as a singleton (with DI support
-    /// wired via <c>WithServiceProvider</c>) and <see cref="PrologActor"/> as a transient
-    /// service so Proto.Actor can resolve and inject it per spawn.
+    /// Registers the Proto.Actor <see cref="ActorSystem"/> with Proto.Remote support (for
+    /// use in worker processes) and <see cref="PrologActor"/> as a transient service.
     /// </summary>
-    public static IServiceCollection AddPrologActors(this IServiceCollection services)
+    /// <param name="port">The port the remote listener will bind to.</param>
+    public static IServiceCollection AddPrologActors(this IServiceCollection services, int port)
         => services
-            .AddSingleton(sp => new ActorSystem().WithServiceProvider(sp))
+            .AddSingleton(sp => new ActorSystem()
+                .WithServiceProvider(sp)
+                .WithRemote(BindToLocalhost(port)
+                    .WithProtoMessages(MessagesReflection.Descriptor)))
             .AddTransient<PrologActor>();
+
+    /// <summary>
+    /// Registers the console-side <see cref="ActorSystem"/> with Proto.Remote (listening on
+    /// <paramref name="port"/>) and <see cref="CliActor"/> as a transient service.
+    /// </summary>
+    /// <param name="port">The port the console process will listen on for remote replies.</param>
+    public static IServiceCollection AddCliActor(this IServiceCollection services, int port = 4000)
+        => services
+            .AddSingleton(sp => new ActorSystem()
+                .WithServiceProvider(sp)
+                .WithRemote(BindToLocalhost(port)
+                    .WithProtoMessages(MessagesReflection.Descriptor)))
+            .AddTransient<CliActor>();
 }

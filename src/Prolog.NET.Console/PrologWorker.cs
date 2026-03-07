@@ -1,142 +1,211 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using Proto;
+using Proto.Remote;
 using Prolog.NET.Actors;
 
 namespace Prolog.NET.Console;
 
 /// <summary>
-/// A hosted background service that spawns a <see cref="PrologActor"/> and demonstrates
-/// the raw lazy-streaming protocol with contextual command hints at each step.
+/// Interactive background service. Starts the remote listener, spawns a <see cref="CliActor"/>,
+/// then drives a keystroke-based console UI. All state lives in the <see cref="CliActor"/> —
+/// every response carries the current <see cref="CliState"/>, slot list, and active slot so
+/// this class never has to track them itself.
 /// </summary>
-public sealed partial class PrologWorker(
+public sealed class PrologWorker(
     ActorSystem actorSystem,
     IServiceProvider serviceProvider,
-    ILogger<PrologWorker> logger,
     IHostApplicationLifetime lifetime) : BackgroundService
 {
-    private PID? _pid;
+    private PID? _cliPid;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        Props props = Props.FromProducer(serviceProvider.GetRequiredService<PrologActor>);
-        _pid = actorSystem.Root.Spawn(props);
-        LogActorStarted();
+        await actorSystem.Remote().StartAsync();
 
-        // Assert a fact
-        LogAssertingFact();
-        CallResult assertResult = await actorSystem.Root.RequestAsync<CallResult>(
-            _pid, new CallMessage("assert(likes(bob, alice))"), stoppingToken);
+        Props props = Props.FromProducer(serviceProvider.GetRequiredService<CliActor>);
+        _cliPid = actorSystem.Root.Spawn(props);
 
-        if (!assertResult.Success)
+        CliState state = CliState.NoSlot;
+        SlotInfo[] slots = EmptySlots();
+        int? activeSlot = null;
+        string? statusLine = null;
+
+        System.Console.Clear();
+
+        while (!stoppingToken.IsCancellationRequested)
         {
-            LogAssertFailed(assertResult.ErrorMessage);
-            return;
-        }
+            RenderHeader(slots, activeSlot);
 
-        LogAssertSucceeded();
-
-        // Open a streaming query
-        const string goal = "likes(bob, X)";
-        LogOpeningQuery(goal);
-
-        OpenQueryResult opened = await actorSystem.Root.RequestAsync<OpenQueryResult>(
-            _pid, new OpenQueryMessage(goal), stoppingToken);
-
-        if (opened is OpenQueryFailedResult openFailed)
-        {
-            LogOpenQueryFailed(openFailed.Error);
-            return;
-        }
-
-        Guid queryId = ((QueryOpenedResult)opened).QueryId;
-        LogQueryOpened(queryId);
-
-        // Pull solutions one at a time
-        while (true)
-        {
-            NextSolutionResult next = await actorSystem.Root.RequestAsync<NextSolutionResult>(
-                _pid, new NextSolutionMessage(queryId), stoppingToken);
-
-            switch (next)
+            if (statusLine != null)
             {
-                case SolutionResult sol:
-                    LogSolutionMore(FormatVariables(sol.Variables));
-                    LogQueryOpenHint(queryId);
-                    break;
+                System.Console.WriteLine(statusLine);
+                statusLine = null;
+            }
 
-                case FinalSolutionResult final:
-                    LogFinalSolution(FormatVariables(final.Variables));
-                    LogNoOpenQueryHint();
-                    goto done;
+            System.Console.WriteLine();
 
-                case NoMoreSolutionsResult:
-                    LogNoMoreSolutions();
-                    LogNoOpenQueryHint();
-                    goto done;
+            CliResponse? response = null;
+            bool halt = false;
 
-                case QueryFailedResult failed:
-                    LogQueryError(failed.Error);
-                    LogNoOpenQueryHint();
-                    goto done;
+            try
+            {
+                (response, halt) = state switch
+                {
+                    CliState.Streaming  => await HandleStreamingInputAsync(stoppingToken),
+                    CliState.SlotReady  => await HandleSlotReadyInputAsync(stoppingToken),
+                    _                   => await HandleNoSlotInputAsync(stoppingToken),
+                };
+            }
+            catch (OperationCanceledException) { break; }
+            catch (Exception ex) { statusLine = $"[!] {ex.Message}"; }
+
+            if (halt)
+            {
+                await RequestAsync<CliResponse>(new HaltRequest(), stoppingToken);
+                break;
+            }
+
+            if (response != null)
+            {
+                state      = response.State;
+                slots      = response.Slots;
+                activeSlot = response.ActiveSlot;
+                statusLine = FormatResponse(response);
+                System.Console.Clear();
             }
         }
 
-        done:
-        // Demo complete — signal the host to shut down gracefully.
         lifetime.StopApplication();
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        if (_pid is not null)
-        {
-            await actorSystem.Root.StopAsync(_pid);
-        }
+        if (_cliPid != null)
+            await actorSystem.Root.StopAsync(_cliPid);
 
+        await actorSystem.Remote().ShutdownAsync();
         await base.StopAsync(cancellationToken);
     }
 
-    private static string FormatVariables(IReadOnlyDictionary<string, string> variables)
-        => string.Join(", ", variables.Select(kv => $"{kv.Key} = {kv.Value}"));
+    // --- Input handlers ---
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "PrologActor started — try: CallMessage | LoadFileMessage | OpenQueryMessage")]
-    private partial void LogActorStarted();
+    private async Task<(CliResponse? response, bool halt)> HandleNoSlotInputAsync(CancellationToken ct)
+    {
+        System.Console.WriteLine("[L] Load file  [H] Halt");
+        ConsoleKeyInfo k = System.Console.ReadKey(intercept: true);
+        System.Console.WriteLine();
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Asserting likes(bob, alice)...")]
-    private partial void LogAssertingFact();
+        return k.Key switch
+        {
+            ConsoleKey.L => (await HandleLoadAsync(ct), false),
+            ConsoleKey.H => (null, true),
+            _            => (null, false),
+        };
+    }
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "assert failed: {Error}")]
-    private partial void LogAssertFailed(string? error);
+    private async Task<(CliResponse? response, bool halt)> HandleSlotReadyInputAsync(CancellationToken ct)
+    {
+        System.Console.WriteLine("[L] Load  [U] Unload  [S] Switch  [H] Halt  or type a query:");
+        System.Console.Write("> ");
+        ConsoleKeyInfo k = System.Console.ReadKey(intercept: true);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "assert succeeded — try: CallMessage | OpenQueryMessage")]
-    private partial void LogAssertSucceeded();
+        switch (k.Key)
+        {
+            case ConsoleKey.L: System.Console.WriteLine(); return (await HandleLoadAsync(ct),   false);
+            case ConsoleKey.U: System.Console.WriteLine(); return (await HandleUnloadAsync(ct), false);
+            case ConsoleKey.S: System.Console.WriteLine(); return (await HandleSwitchAsync(ct), false);
+            case ConsoleKey.H: System.Console.WriteLine(); return (null, true);
+            case ConsoleKey.Enter:
+            case ConsoleKey.Escape:
+                System.Console.WriteLine();
+                return (null, false);
+            default:
+                if (k.KeyChar != '\0' && !char.IsControl(k.KeyChar))
+                {
+                    System.Console.Write(k.KeyChar);
+                    string rest = System.Console.ReadLine() ?? "";
+                    string goal = $"{k.KeyChar}{rest}";
+                    return (await RequestAsync<CliResponse>(new QueryRequest(goal), ct), false);
+                }
+                return (null, false);
+        }
+    }
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Opening query: {Goal}")]
-    private partial void LogOpeningQuery(string goal);
+    private async Task<(CliResponse? response, bool halt)> HandleStreamingInputAsync(CancellationToken ct)
+    {
+        System.Console.WriteLine("[N] Next  [C] Close  [H] Halt");
+        ConsoleKeyInfo k = System.Console.ReadKey(intercept: true);
+        System.Console.WriteLine();
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "OpenQuery failed: {Error}")]
-    private partial void LogOpenQueryFailed(string error);
+        return k.Key switch
+        {
+            ConsoleKey.N => (await RequestAsync<CliResponse>(new NextSolutionRequest(), ct), false),
+            ConsoleKey.C => (await RequestAsync<CliResponse>(new CloseQueryRequest(),    ct), false),
+            ConsoleKey.H => (null, true),
+            _            => (null, false),
+        };
+    }
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Query opened (id: {QueryId}) — send NextSolutionMessage to fetch first solution")]
-    private partial void LogQueryOpened(Guid queryId);
+    // --- Sub-prompts ---
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Solution: {Vars}  [more may follow]")]
-    private partial void LogSolutionMore(string vars);
+    private async Task<CliResponse?> HandleLoadAsync(CancellationToken ct)
+    {
+        System.Console.Write("File path: ");
+        string path = (System.Console.ReadLine() ?? "").Trim();
+        if (string.IsNullOrEmpty(path)) return null;
+        return await RequestAsync<CliResponse>(new LoadFileRequest(path), ct);
+    }
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "  → open query {QueryId} — send NextSolutionMessage or CloseQueryMessage")]
-    private partial void LogQueryOpenHint(Guid queryId);
+    private async Task<CliResponse?> HandleUnloadAsync(CancellationToken ct)
+    {
+        System.Console.Write("Slot to unload (0-3): ");
+        if (int.TryParse(System.Console.ReadLine(), out int slot))
+            return await RequestAsync<CliResponse>(new UnloadFileRequest(slot), ct);
+        return null;
+    }
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Solution: {Vars}  [FinalSolution — query closed automatically]")]
-    private partial void LogFinalSolution(string vars);
+    private async Task<CliResponse?> HandleSwitchAsync(CancellationToken ct)
+    {
+        System.Console.Write("Switch to slot (0-3): ");
+        if (int.TryParse(System.Console.ReadLine(), out int slot))
+            return await RequestAsync<CliResponse>(new SwitchSlotRequest(slot), ct);
+        return null;
+    }
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "  → no open query — try: OpenQueryMessage | CallMessage")]
-    private partial void LogNoOpenQueryHint();
+    // --- Helpers ---
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "No more solutions — query closed automatically")]
-    private partial void LogNoMoreSolutions();
+    private Task<T> RequestAsync<T>(object message, CancellationToken ct)
+        => actorSystem.Root.RequestAsync<T>(_cliPid!, message, ct);
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "Query error: {Error} — query closed automatically")]
-    private partial void LogQueryError(string error);
+    private static void RenderHeader(SlotInfo[] slots, int? activeSlot)
+    {
+        string slotBar = string.Join(" | ", slots.Select(s =>
+            s.FilePath != null ? Path.GetFileName(s.FilePath) : "(empty)"));
+
+        System.Console.WriteLine($"=== Prolog.NET ===  [{slotBar}]");
+
+        string activeDisplay = activeSlot.HasValue && slots[activeSlot.Value].FilePath != null
+            ? Path.GetFileName(slots[activeSlot.Value].FilePath)!
+            : "(none)";
+
+        System.Console.WriteLine($"Active: {activeDisplay}");
+    }
+
+    private static string? FormatResponse(CliResponse response) => response switch
+    {
+        CliError err                        => $"[!] {err.Error}",
+        CliSolution { IsFinal: true } sol   => $"  {FormatVars(sol.Variables)}  (last solution)",
+        CliSolution sol                     => $"  {FormatVars(sol.Variables)}",
+        CliNoMoreSolutions                  => "(no more solutions)",
+        _                                   => null,
+    };
+
+    private static string FormatVars(IReadOnlyDictionary<string, string> variables)
+        => variables.Count == 0
+            ? "true"
+            : string.Join(", ", variables.Select(kv => $"{kv.Key} = {kv.Value}"));
+
+    private static SlotInfo[] EmptySlots() =>
+        Enumerable.Range(0, 4).Select(i => new SlotInfo(i, null)).ToArray();
 }
