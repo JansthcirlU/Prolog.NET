@@ -1,5 +1,3 @@
-using System;
-
 namespace Prolog.NET.Swipl.Generated;
 
 internal unsafe partial struct PL_extension
