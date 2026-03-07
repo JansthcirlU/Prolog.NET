@@ -21,10 +21,43 @@ public sealed class CliActor : IActor
     private int? _activeSlot;
     private string? _openQueryId;
 
+    private static readonly IReadOnlyList<AllowedAction> NoSlotActions =
+    [
+        new(CliAction.LoadFile, "Load file", 'L', ActionInput.FilePath, "File path: "),
+        new(CliAction.Halt,     "Halt",      'H', ActionInput.None),
+    ];
+
+    private static readonly IReadOnlyList<AllowedAction> SlotReadyActions =
+    [
+        new(CliAction.LoadFile,    "Load",         'L', ActionInput.FilePath,  "File path: "),
+        new(CliAction.UnloadFile,  "Unload",       'U', ActionInput.SlotNumber, "Slot (0-3): "),
+        new(CliAction.SwitchSlot,  "Switch",       'S', ActionInput.SlotNumber, "Slot (0-3): "),
+        new(CliAction.Halt,        "Halt",         'H', ActionInput.None),
+        new(CliAction.SubmitQuery, "type a query", null, ActionInput.QueryText),
+    ];
+
+    private static readonly IReadOnlyList<AllowedAction> StreamingActions =
+    [
+        new(CliAction.NextSolution, "Next",  'N', ActionInput.None),
+        new(CliAction.CloseQuery,   "Close", 'C', ActionInput.None),
+        new(CliAction.Halt,         "Halt",  'H', ActionInput.None),
+    ];
+
+    private IReadOnlyList<AllowedAction> GetAllowedActions() => GetState() switch
+    {
+        CliState.NoSlot    => NoSlotActions,
+        CliState.SlotReady => SlotReadyActions,
+        CliState.Streaming => StreamingActions,
+        _                  => [],
+    };
+
     public async Task ReceiveAsync(IContext context)
     {
         switch (context.Message)
         {
+            case GetStateRequest:
+                context.Respond(new CliOk(GetState(), GetSlotInfos(), _activeSlot, GetAllowedActions()));
+                break;
             case LoadFileRequest msg:
                 await HandleLoadFileAsync(context, msg);
                 break;
@@ -88,7 +121,7 @@ public sealed class CliActor : IActor
 
             _slots[slot] = new SlotState(remotePid, msg.Path, process!);
             _activeSlot = slot;
-            context.Respond(new CliOk(GetState(), GetSlotInfos(), _activeSlot));
+            context.Respond(new CliOk(GetState(), GetSlotInfos(), _activeSlot, GetAllowedActions()));
         }
         catch (Exception ex)
         {
@@ -118,7 +151,7 @@ public sealed class CliActor : IActor
         if (_activeSlot == msg.Slot)
             _activeSlot = _slots.Count > 0 ? _slots.Keys.Min() : null;
 
-        context.Respond(new CliOk(GetState(), GetSlotInfos(), _activeSlot));
+        context.Respond(new CliOk(GetState(), GetSlotInfos(), _activeSlot, GetAllowedActions()));
     }
 
     private void HandleSwitchSlot(IContext context, SwitchSlotRequest msg)
@@ -138,7 +171,7 @@ public sealed class CliActor : IActor
         }
 
         _activeSlot = msg.Slot;
-        context.Respond(new CliOk(GetState(), GetSlotInfos(), _activeSlot));
+        context.Respond(new CliOk(GetState(), GetSlotInfos(), _activeSlot, GetAllowedActions()));
     }
 
     private async Task HandleQueryAsync(IContext context, QueryRequest msg)
@@ -214,13 +247,13 @@ public sealed class CliActor : IActor
             _openQueryId = null;
         }
 
-        context.Respond(new CliOk(GetState(), GetSlotInfos(), _activeSlot));
+        context.Respond(new CliOk(GetState(), GetSlotInfos(), _activeSlot, GetAllowedActions()));
     }
 
     private void HandleHalt(IContext context)
     {
         KillAllWorkers();
-        context.Respond(new CliOk(CliState.NoSlot, GetSlotInfos(), null));
+        context.Respond(new CliOk(CliState.NoSlot, GetSlotInfos(), null, NoSlotActions));
     }
 
     private void KillAllWorkers()
@@ -243,30 +276,30 @@ public sealed class CliActor : IActor
             case NextSolutionResponse.ResultOneofCase.Solution:
                 return new CliSolution(
                     new Dictionary<string, string>(response.Solution.Variables),
-                    false, GetState(), GetSlotInfos(), _activeSlot);
+                    false, GetState(), GetSlotInfos(), _activeSlot, GetAllowedActions());
 
             case NextSolutionResponse.ResultOneofCase.FinalSolution:
                 _openQueryId = null;
                 return new CliSolution(
                     new Dictionary<string, string>(response.FinalSolution.Variables),
-                    true, GetState(), GetSlotInfos(), _activeSlot);
+                    true, GetState(), GetSlotInfos(), _activeSlot, GetAllowedActions());
 
             case NextSolutionResponse.ResultOneofCase.NoMore:
                 _openQueryId = null;
-                return new CliNoMoreSolutions(GetState(), GetSlotInfos(), _activeSlot);
+                return new CliNoMoreSolutions(GetState(), GetSlotInfos(), _activeSlot, GetAllowedActions());
 
             case NextSolutionResponse.ResultOneofCase.Failed:
                 _openQueryId = null;
-                return new CliError(response.Failed.Error, GetState(), GetSlotInfos(), _activeSlot);
+                return new CliError(response.Failed.Error, GetState(), GetSlotInfos(), _activeSlot, GetAllowedActions());
 
             default:
                 _openQueryId = null;
-                return new CliError("Unexpected response from worker", GetState(), GetSlotInfos(), _activeSlot);
+                return new CliError("Unexpected response from worker", GetState(), GetSlotInfos(), _activeSlot, GetAllowedActions());
         }
     }
 
     private CliResponse MakeError(string error) =>
-        new CliError(error, GetState(), GetSlotInfos(), _activeSlot);
+        new CliError(error, GetState(), GetSlotInfos(), _activeSlot, GetAllowedActions());
 
     private bool TryGetActiveSlot(out SlotState slot)
     {

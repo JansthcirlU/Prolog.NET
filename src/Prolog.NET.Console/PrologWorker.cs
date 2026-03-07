@@ -8,9 +8,8 @@ namespace Prolog.NET.Console;
 
 /// <summary>
 /// Interactive background service. Starts the remote listener, spawns a <see cref="CliActor"/>,
-/// then drives a keystroke-based console UI. All state lives in the <see cref="CliActor"/> —
-/// every response carries the current <see cref="CliState"/>, slot list, and active slot so
-/// this class never has to track them itself.
+/// then drives a keystroke-based console UI. All state and allowed actions come from
+/// <see cref="CliResponse"/> — this class never hardcodes what the user can do per state.
 /// </summary>
 public sealed class PrologWorker(
     ActorSystem actorSystem,
@@ -26,16 +25,16 @@ public sealed class PrologWorker(
         Props props = Props.FromProducer(serviceProvider.GetRequiredService<CliActor>);
         _cliPid = actorSystem.Root.Spawn(props);
 
-        CliState state = CliState.NoSlot;
-        SlotInfo[] slots = EmptySlots();
-        int? activeSlot = null;
-        string? statusLine = null;
+        // Get the initial state and allowed actions from the actor.
+        CliResponse current = await RequestAsync<CliResponse>(new GetStateRequest(), stoppingToken);
 
         System.Console.Clear();
 
+        string? statusLine = null;
+
         while (!stoppingToken.IsCancellationRequested)
         {
-            RenderHeader(slots, activeSlot);
+            RenderHeader(current.Slots, current.ActiveSlot);
 
             if (statusLine != null)
             {
@@ -50,12 +49,7 @@ public sealed class PrologWorker(
 
             try
             {
-                (response, halt) = state switch
-                {
-                    CliState.Streaming  => await HandleStreamingInputAsync(stoppingToken),
-                    CliState.SlotReady  => await HandleSlotReadyInputAsync(stoppingToken),
-                    _                   => await HandleNoSlotInputAsync(stoppingToken),
-                };
+                (response, halt) = await HandleInputAsync(current.AllowedActions, stoppingToken);
             }
             catch (OperationCanceledException) { break; }
             catch (Exception ex) { statusLine = $"[!] {ex.Message}"; }
@@ -68,9 +62,7 @@ public sealed class PrologWorker(
 
             if (response != null)
             {
-                state      = response.State;
-                slots      = response.Slots;
-                activeSlot = response.ActiveSlot;
+                current    = response;
                 statusLine = FormatResponse(response);
                 System.Console.Clear();
             }
@@ -88,89 +80,72 @@ public sealed class PrologWorker(
         await base.StopAsync(cancellationToken);
     }
 
-    // --- Input handlers ---
+    // --- Generic input handler ---
 
-    private async Task<(CliResponse? response, bool halt)> HandleNoSlotInputAsync(CancellationToken ct)
+    private async Task<(CliResponse? response, bool halt)>
+        HandleInputAsync(IReadOnlyList<AllowedAction> allowed, CancellationToken ct)
     {
-        System.Console.WriteLine("[L] Load file  [H] Halt");
-        ConsoleKeyInfo k = System.Console.ReadKey(intercept: true);
-        System.Console.WriteLine();
-
-        return k.Key switch
-        {
-            ConsoleKey.L => (await HandleLoadAsync(ct), false),
-            ConsoleKey.H => (null, true),
-            _            => (null, false),
-        };
-    }
-
-    private async Task<(CliResponse? response, bool halt)> HandleSlotReadyInputAsync(CancellationToken ct)
-    {
-        System.Console.WriteLine("[L] Load  [U] Unload  [S] Switch  [H] Halt  or type a query:");
+        // Render hint bar from keyed actions only.
+        string hints = string.Join("  ",
+            allowed.Where(a => a.KeyHint.HasValue)
+                   .Select(a => $"[{a.KeyHint}] {a.Label}"));
+        System.Console.WriteLine(hints);
         System.Console.Write("> ");
-        ConsoleKeyInfo k = System.Console.ReadKey(intercept: true);
 
-        switch (k.Key)
-        {
-            case ConsoleKey.L: System.Console.WriteLine(); return (await HandleLoadAsync(ct),   false);
-            case ConsoleKey.U: System.Console.WriteLine(); return (await HandleUnloadAsync(ct), false);
-            case ConsoleKey.S: System.Console.WriteLine(); return (await HandleSwitchAsync(ct), false);
-            case ConsoleKey.H: System.Console.WriteLine(); return (null, true);
-            case ConsoleKey.Enter:
-            case ConsoleKey.Escape:
-                System.Console.WriteLine();
-                return (null, false);
-            default:
-                if (k.KeyChar != '\0' && !char.IsControl(k.KeyChar))
-                {
-                    System.Console.Write(k.KeyChar);
-                    string rest = System.Console.ReadLine() ?? "";
-                    string goal = $"{k.KeyChar}{rest}";
-                    return (await RequestAsync<CliResponse>(new QueryRequest(goal), ct), false);
-                }
-                return (null, false);
-        }
-    }
-
-    private async Task<(CliResponse? response, bool halt)> HandleStreamingInputAsync(CancellationToken ct)
-    {
-        System.Console.WriteLine("[N] Next  [C] Close  [H] Halt");
         ConsoleKeyInfo k = System.Console.ReadKey(intercept: true);
         System.Console.WriteLine();
 
-        return k.Key switch
+        // Find matching action by key hint.
+        AllowedAction? matched = allowed.FirstOrDefault(a =>
+            a.KeyHint.HasValue &&
+            char.ToUpperInvariant(k.KeyChar) == char.ToUpperInvariant(a.KeyHint.Value));
+
+        // Fall back to free-text (QueryText) action if no keyed action matched.
+        if (matched == null)
         {
-            ConsoleKey.N => (await RequestAsync<CliResponse>(new NextSolutionRequest(), ct), false),
-            ConsoleKey.C => (await RequestAsync<CliResponse>(new CloseQueryRequest(),    ct), false),
-            ConsoleKey.H => (null, true),
-            _            => (null, false),
+            AllowedAction? textAction = allowed.FirstOrDefault(a => a.RequiredInput == ActionInput.QueryText);
+            if (textAction != null && k.KeyChar != '\0' && !char.IsControl(k.KeyChar))
+                matched = textAction;
+        }
+
+        if (matched == null) return (null, false);
+
+        return matched.Action switch
+        {
+            CliAction.Halt          => (null, true),
+            CliAction.LoadFile      => (await LoadFileAsync(matched, ct), false),
+            CliAction.UnloadFile    => (await SlotInputAsync(matched, s => new UnloadFileRequest(s), ct), false),
+            CliAction.SwitchSlot    => (await SlotInputAsync(matched, s => new SwitchSlotRequest(s), ct), false),
+            CliAction.SubmitQuery   => (await QueryAsync(k.KeyChar, ct), false),
+            CliAction.NextSolution  => (await RequestAsync<CliResponse>(new NextSolutionRequest(), ct), false),
+            CliAction.CloseQuery    => (await RequestAsync<CliResponse>(new CloseQueryRequest(), ct), false),
+            _                       => (null, false),
         };
     }
 
-    // --- Sub-prompts ---
-
-    private async Task<CliResponse?> HandleLoadAsync(CancellationToken ct)
+    private async Task<CliResponse?> LoadFileAsync(AllowedAction action, CancellationToken ct)
     {
-        System.Console.Write("File path: ");
+        System.Console.Write(action.InputPrompt ?? "File path: ");
         string path = (System.Console.ReadLine() ?? "").Trim();
         if (string.IsNullOrEmpty(path)) return null;
         return await RequestAsync<CliResponse>(new LoadFileRequest(path), ct);
     }
 
-    private async Task<CliResponse?> HandleUnloadAsync(CancellationToken ct)
+    private async Task<CliResponse?> SlotInputAsync(
+        AllowedAction action, Func<int, object> makeRequest, CancellationToken ct)
     {
-        System.Console.Write("Slot to unload (0-3): ");
+        System.Console.Write(action.InputPrompt ?? "Slot (0-3): ");
         if (int.TryParse(System.Console.ReadLine(), out int slot))
-            return await RequestAsync<CliResponse>(new UnloadFileRequest(slot), ct);
+            return await RequestAsync<CliResponse>(makeRequest(slot), ct);
         return null;
     }
 
-    private async Task<CliResponse?> HandleSwitchAsync(CancellationToken ct)
+    private async Task<CliResponse?> QueryAsync(char firstChar, CancellationToken ct)
     {
-        System.Console.Write("Switch to slot (0-3): ");
-        if (int.TryParse(System.Console.ReadLine(), out int slot))
-            return await RequestAsync<CliResponse>(new SwitchSlotRequest(slot), ct);
-        return null;
+        System.Console.Write(firstChar);
+        string rest = System.Console.ReadLine() ?? "";
+        string goal = $"{firstChar}{rest}";
+        return await RequestAsync<CliResponse>(new QueryRequest(goal), ct);
     }
 
     // --- Helpers ---
@@ -205,7 +180,4 @@ public sealed class PrologWorker(
         => variables.Count == 0
             ? "true"
             : string.Join(", ", variables.Select(kv => $"{kv.Key} = {kv.Value}"));
-
-    private static SlotInfo[] EmptySlots() =>
-        Enumerable.Range(0, 4).Select(i => new SlotInfo(i, null)).ToArray();
 }
