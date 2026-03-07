@@ -5,21 +5,16 @@ namespace Prolog.NET.Actors;
 
 /// <summary>
 /// A Proto.Actor actor that fronts a <see cref="PrologEngine"/> instance with
-/// request-reply message semantics.
+/// request-reply message semantics using Protocol Buffer message types.
 /// </summary>
 /// <remarks>
-/// <para>
 /// Supported inbound messages: <see cref="LoadFileMessage"/>, <see cref="CallMessage"/>,
 /// <see cref="QueryMessage"/>, <see cref="OpenQueryMessage"/>, <see cref="NextSolutionMessage"/>,
 /// <see cref="CloseQueryMessage"/>. Unknown messages are silently ignored.
-/// </para>
-/// <para>
+///
 /// Exceptions from the Prolog engine are caught per-handler and returned as error responses
-/// (<see cref="CallResult.ErrorMessage"/> / <see cref="QueryResult.ErrorMessage"/> /
-/// <see cref="OpenQueryFailedResult"/> / <see cref="QueryFailedResult"/>) rather than
-/// propagating — this prevents Proto.Actor's supervisor restart strategy from firing and
-/// ensures callers always receive a reply.
-/// </para>
+/// rather than propagating — this prevents Proto.Actor's supervisor restart strategy from
+/// firing and ensures callers always receive a reply.
 /// </remarks>
 public class PrologActor(PrologEngine engine) : IActor
 {
@@ -60,11 +55,11 @@ public class PrologActor(PrologEngine engine) : IActor
         try
         {
             engine.LoadFile(msg.Path);
-            context.Respond(new CallResult(true));
+            context.Respond(new CallResult { Success = true });
         }
         catch (PrologException ex)
         {
-            context.Respond(new CallResult(false, ex.PrologMessage ?? ex.Message));
+            context.Respond(new CallResult { Success = false, ErrorMessage = ex.PrologMessage ?? ex.Message });
         }
     }
 
@@ -73,11 +68,11 @@ public class PrologActor(PrologEngine engine) : IActor
         try
         {
             bool ok = engine.Call(msg.Goal);
-            context.Respond(new CallResult(ok));
+            context.Respond(new CallResult { Success = ok });
         }
         catch (PrologException ex)
         {
-            context.Respond(new CallResult(false, ex.PrologMessage ?? ex.Message));
+            context.Respond(new CallResult { Success = false, ErrorMessage = ex.PrologMessage ?? ex.Message });
         }
     }
 
@@ -85,21 +80,21 @@ public class PrologActor(PrologEngine engine) : IActor
     {
         try
         {
-            List<IReadOnlyDictionary<string, string>> solutions = [];
-
+            var result = new QueryResult();
             using PrologQuery query = engine.OpenQuery(msg.Goal);
             foreach (PrologSolution solution in query.Solutions)
             {
-                Dictionary<string, string> row = solution.VariableNames
-                    .ToDictionary(name => name, name => solution[name].ToString());
-                solutions.Add(row);
+                var row = new SolutionRow();
+                foreach (string name in solution.VariableNames)
+                    row.Variables[name] = solution[name].ToString();
+                result.Solutions.Add(row);
             }
 
-            context.Respond(new QueryResult(solutions));
+            context.Respond(result);
         }
         catch (PrologException ex)
         {
-            context.Respond(new QueryResult([], ex.PrologMessage ?? ex.Message));
+            context.Respond(new QueryResult { ErrorMessage = ex.PrologMessage ?? ex.Message });
         }
     }
 
@@ -110,19 +105,25 @@ public class PrologActor(PrologEngine engine) : IActor
             PrologQuery query = engine.OpenQuery(msg.Goal);
             Guid id = Guid.NewGuid();
             _openQueries[id] = query;
-            context.Respond(new QueryOpenedResult(id));
+            context.Respond(new OpenQueryResponse
+            {
+                Opened = new QueryOpenedResult { QueryId = id.ToString() }
+            });
         }
         catch (PrologException ex)
         {
-            context.Respond(new OpenQueryFailedResult(ex.PrologMessage ?? ex.Message));
+            context.Respond(new OpenQueryResponse
+            {
+                Failed = new OpenQueryFailedResult { Error = ex.PrologMessage ?? ex.Message }
+            });
         }
     }
 
     private void HandleNextSolution(IContext context, NextSolutionMessage msg)
     {
-        if (!_openQueries.TryGetValue(msg.QueryId, out PrologQuery? query))
+        if (!Guid.TryParse(msg.QueryId, out Guid id) || !_openQueries.TryGetValue(id, out PrologQuery? query))
         {
-            context.Respond(new NoMoreSolutionsResult());
+            context.Respond(new NextSolutionResponse { NoMore = new NoMoreSolutionsResult() });
             return;
         }
 
@@ -130,38 +131,44 @@ public class PrologActor(PrologEngine engine) : IActor
         {
             if (query.Next())
             {
-                Dictionary<string, string> vars = query.Current!.VariableNames
-                    .ToDictionary(name => name, name => query.Current[name].ToString());
+                Dictionary<string, string> vars = BuildVars(query.Current!);
 
                 if (query.IsLastSolution)
                 {
-                    _ = _openQueries.Remove(msg.QueryId);
+                    _ = _openQueries.Remove(id);
                     query.Dispose();
-                    context.Respond(new FinalSolutionResult(vars));
+                    var result = new FinalSolutionResult();
+                    result.Variables.Add(vars);
+                    context.Respond(new NextSolutionResponse { FinalSolution = result });
                 }
                 else
                 {
-                    context.Respond(new SolutionResult(vars));
+                    var result = new SolutionResult();
+                    result.Variables.Add(vars);
+                    context.Respond(new NextSolutionResponse { Solution = result });
                 }
             }
             else
             {
-                _ = _openQueries.Remove(msg.QueryId);
+                _ = _openQueries.Remove(id);
                 query.Dispose();
-                context.Respond(new NoMoreSolutionsResult());
+                context.Respond(new NextSolutionResponse { NoMore = new NoMoreSolutionsResult() });
             }
         }
         catch (PrologException ex)
         {
-            _ = _openQueries.Remove(msg.QueryId);
+            _ = _openQueries.Remove(id);
             query.Dispose();
-            context.Respond(new QueryFailedResult(ex.PrologMessage ?? ex.Message));
+            context.Respond(new NextSolutionResponse
+            {
+                Failed = new QueryFailedResult { Error = ex.PrologMessage ?? ex.Message }
+            });
         }
     }
 
     private void HandleCloseQuery(CloseQueryMessage msg)
     {
-        if (_openQueries.Remove(msg.QueryId, out PrologQuery? query))
+        if (Guid.TryParse(msg.QueryId, out Guid id) && _openQueries.Remove(id, out PrologQuery? query))
         {
             query.Dispose();
         }
@@ -176,4 +183,7 @@ public class PrologActor(PrologEngine engine) : IActor
 
         _openQueries.Clear();
     }
+
+    private static Dictionary<string, string> BuildVars(PrologSolution solution)
+        => solution.VariableNames.ToDictionary(name => name, name => solution[name].ToString());
 }

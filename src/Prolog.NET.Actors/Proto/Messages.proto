@@ -1,0 +1,88 @@
+syntax = "proto3";
+
+package prolog.messages;
+option csharp_namespace = "Prolog.NET.Actors";
+
+// --- Requests ---
+
+message LoadFileMessage {
+  string path = 1;
+}
+
+message CallMessage {
+  string goal = 1;
+}
+
+message QueryMessage {
+  string goal = 1;
+}
+
+message OpenQueryMessage {
+  string goal = 1;
+}
+
+message NextSolutionMessage {
+  string query_id = 1;
+}
+
+message CloseQueryMessage {
+  string query_id = 1;
+}
+
+// --- Simple responses ---
+
+message CallResult {
+  bool success = 1;
+  string error_message = 2;
+}
+
+message SolutionRow {
+  map<string, string> variables = 1;
+}
+
+message QueryResult {
+  repeated SolutionRow solutions = 1;
+  string error_message = 2;
+}
+
+// --- OpenQuery response (oneof wrapper for polymorphism) ---
+
+message QueryOpenedResult {
+  string query_id = 1;
+}
+
+message OpenQueryFailedResult {
+  string error = 1;
+}
+
+message OpenQueryResponse {
+  oneof result {
+    QueryOpenedResult opened = 1;
+    OpenQueryFailedResult failed = 2;
+  }
+}
+
+// --- NextSolution response (oneof wrapper for polymorphism) ---
+
+message SolutionResult {
+  map<string, string> variables = 1;
+}
+
+message FinalSolutionResult {
+  map<string, string> variables = 1;
+}
+
+message NoMoreSolutionsResult {}
+
+message QueryFailedResult {
+  string error = 1;
+}
+
+message NextSolutionResponse {
+  oneof result {
+    SolutionResult solution = 1;
+    FinalSolutionResult final_solution = 2;
+    NoMoreSolutionsResult no_more = 3;
+    QueryFailedResult failed = 4;
+  }
+}

@@ -3,5 +3,6 @@
     <Project Path="src/Prolog.NET.Actors/Prolog.NET.Actors.csproj" />
     <Project Path="src/Prolog.NET.Console/Prolog.NET.Console.csproj" />
     <Project Path="src/Prolog.NET.Swipl/Prolog.NET.Swipl.csproj" />
+    <Project Path="src/Prolog.NET.Worker/Prolog.NET.Worker.csproj" />
   </Folder>
 </Solution>
