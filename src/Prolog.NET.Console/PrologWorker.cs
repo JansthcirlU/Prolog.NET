@@ -13,7 +13,8 @@ namespace Prolog.NET.Console;
 public sealed partial class PrologWorker(
     ActorSystem actorSystem,
     IServiceProvider serviceProvider,
-    ILogger<PrologWorker> logger) : BackgroundService
+    ILogger<PrologWorker> logger,
+    IHostApplicationLifetime lifetime) : BackgroundService
 {
     private PID? _pid;
 
@@ -83,8 +84,8 @@ public sealed partial class PrologWorker(
         }
 
         done:
-        // Keep the service running until Ctrl+C
-        await Task.Delay(Timeout.Infinite, stoppingToken);
+        // Demo complete — signal the host to shut down gracefully.
+        lifetime.StopApplication();
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken)
