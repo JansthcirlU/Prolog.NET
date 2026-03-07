@@ -135,7 +135,7 @@ public class PrologActor(PrologEngine engine) : IActor
 
                 if (query.IsLastSolution)
                 {
-                    _openQueries.Remove(msg.QueryId);
+                    _ = _openQueries.Remove(msg.QueryId);
                     query.Dispose();
                     context.Respond(new FinalSolutionResult(vars));
                 }
@@ -146,14 +146,14 @@ public class PrologActor(PrologEngine engine) : IActor
             }
             else
             {
-                _openQueries.Remove(msg.QueryId);
+                _ = _openQueries.Remove(msg.QueryId);
                 query.Dispose();
                 context.Respond(new NoMoreSolutionsResult());
             }
         }
         catch (PrologException ex)
         {
-            _openQueries.Remove(msg.QueryId);
+            _ = _openQueries.Remove(msg.QueryId);
             query.Dispose();
             context.Respond(new QueryFailedResult(ex.PrologMessage ?? ex.Message));
         }
