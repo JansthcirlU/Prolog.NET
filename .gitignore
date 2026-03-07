@@ -90,6 +90,8 @@ StyleCopReport.xml
 *.rsp
 # but not Directory.Build.rsp, as it configures directory-level build defaults
 !Directory.Build.rsp
+# also not Prolog.NET.Swipl/*.rsp as they show how to generate SWI-Prolog DLL bindings
+!src/Prolog.NET.Swipl/*.rsp
 *.sbr
 *.tlb
 *.tli

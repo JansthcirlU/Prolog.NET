@@ -8,6 +8,11 @@
 
   <ItemGroup>
     <PackageReference Include="Proto.Actor" Version="1.8.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Prolog.NET.Swipl\Prolog.NET.Swipl.csproj" />
   </ItemGroup>
 
 </Project>
