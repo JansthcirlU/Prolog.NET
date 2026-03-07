@@ -14,9 +14,15 @@ public sealed class PrologSolution
     // The nuint values are opaque term references managed by the SWI-Prolog engine.
     private readonly IReadOnlyDictionary<string, nuint> _variables;
 
-    internal PrologSolution(IReadOnlyDictionary<string, nuint> variables)
+    // Pre-evaluated string representations of each variable, captured on the Prolog thread.
+    private readonly IReadOnlyDictionary<string, string> _termStrings;
+
+    internal PrologSolution(
+        IReadOnlyDictionary<string, nuint> variables,
+        IReadOnlyDictionary<string, string> termStrings)
     {
         _variables = variables;
+        _termStrings = termStrings;
     }
 
     /// <summary>
@@ -44,7 +50,8 @@ public sealed class PrologSolution
                     $"Available variables: {string.Join(", ", _variables.Keys)}");
             }
 
-            return new PrologTerm(termRef);
+            _ = _termStrings.TryGetValue(variableName, out string? cached);
+            return new PrologTerm(termRef, cached);
         }
     }
 
@@ -55,7 +62,8 @@ public sealed class PrologSolution
     {
         if (_variables.TryGetValue(variableName, out nuint termRef))
         {
-            term = new PrologTerm(termRef);
+            _ = _termStrings.TryGetValue(variableName, out string? cached);
+            term = new PrologTerm(termRef, cached);
             return true;
         }
 

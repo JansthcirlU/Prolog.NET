@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Text;
 using Prolog.NET.Swipl.Generated;
 
 namespace Prolog.NET.Swipl;
@@ -13,9 +12,13 @@ public sealed class PrologTerm
     // term_t is a nuint handle — opaque to the public API.
     private readonly nuint _termRef;
 
-    internal PrologTerm(nuint termRef)
+    // Pre-evaluated string representation captured on the Prolog thread, if available.
+    private readonly string? _cachedToString;
+
+    internal PrologTerm(nuint termRef, string? cachedToString = null)
     {
         _termRef = termRef;
+        _cachedToString = cachedToString;
     }
 
     /// <summary>True if the term is an unbound variable.</summary>
@@ -112,8 +115,18 @@ public sealed class PrologTerm
     /// <summary>
     /// Converts this term to its Prolog text representation using <c>term_to_atom/2</c>.
     /// </summary>
+    /// <remarks>
+    /// If this term was obtained from a <see cref="PrologSolution"/>, the string was
+    /// pre-evaluated on the Prolog thread and is returned directly. Otherwise this method
+    /// must be called from the Prolog engine's dedicated thread.
+    /// </remarks>
     public override string ToString()
     {
+        if (_cachedToString != null)
+        {
+            return _cachedToString;
+        }
+
         unsafe
         {
             // term_to_atom(+Term, -Atom)
@@ -154,7 +167,7 @@ public sealed class PrologTerm
                 }
                 finally
                 {
-                    SwiPrologNative.PL_close_query(qid);
+                    _ = SwiPrologNative.PL_close_query(qid);
                 }
             }
         }

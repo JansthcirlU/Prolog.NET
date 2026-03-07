@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using Prolog.NET.Swipl.Generated;
@@ -14,6 +16,11 @@ namespace Prolog.NET.Swipl;
 /// down. The engine must be initialized before any Prolog operations are performed.
 /// </para>
 /// <para>
+/// All SWI-Prolog foreign-interface calls are marshalled to a single dedicated thread that
+/// owns the engine for its lifetime. This satisfies SWI-Prolog's thread-local-storage
+/// requirement on Linux and macOS, and is equally correct on Windows.
+/// </para>
+/// <para>
 /// Disposing the engine calls <c>PL_cleanup</c>, which shuts down the Prolog runtime.
 /// Re-initializing after disposal is not supported by SWI-Prolog.
 /// </para>
@@ -23,9 +30,52 @@ public sealed class PrologEngine : IDisposable
     private static PrologEngine? _instance;
     private static readonly Lock _lock = new();
 
+    private readonly Thread _prologThread;
+    private readonly BlockingCollection<Action> _workQueue = [];
     private bool _disposed;
 
-    private PrologEngine() { }
+    private PrologEngine(string[]? args)
+    {
+        using ManualResetEventSlim initDone = new(false);
+        Exception? initError = null;
+
+        _prologThread = new Thread(() =>
+        {
+            try
+            {
+                InitializeNative(args);
+            }
+            catch (Exception ex)
+            {
+                initError = ex;
+                initDone.Set();
+                return;
+            }
+
+            initDone.Set();
+
+            foreach (Action work in _workQueue.GetConsumingEnumerable())
+            {
+                work();
+            }
+
+            unsafe { _ = SwiPrologNative.PL_cleanup(0); }
+        })
+        {
+            IsBackground = true,
+            Name = "SWI-Prolog"
+        };
+        _prologThread.Start();
+
+        initDone.Wait();
+
+        if (initError != null)
+        {
+            ExceptionDispatchInfo.Capture(initError).Throw();
+        }
+    }
+
+    internal bool IsDisposed => _disposed;
 
     /// <summary>
     /// Gets whether the SWI-Prolog engine is currently initialized.
@@ -63,21 +113,94 @@ public sealed class PrologEngine : IDisposable
                     "The Prolog engine is already initialized. Dispose the existing instance first.");
             }
 
-            // If already initialized externally (e.g. host process), wrap without re-init.
-            if (IsInitialized)
-            {
-                _instance = new PrologEngine();
-                return _instance;
-            }
-
-            InitializeNative(args);
-            _instance = new PrologEngine();
+            _instance = new PrologEngine(args);
             return _instance;
         }
     }
 
+    /// <summary>
+    /// Runs <paramref name="work"/> on the dedicated Prolog thread, blocking the caller
+    /// until it completes. Exceptions are captured and re-thrown on the calling thread.
+    /// </summary>
+    internal void RunOnPrologThread(Action work)
+    {
+        ThrowIfDisposed();
+
+        if (Thread.CurrentThread == _prologThread)
+        {
+            work();
+            return;
+        }
+
+        using ManualResetEventSlim done = new(false);
+        Exception? error = null;
+
+        try
+        {
+            _workQueue.Add(() =>
+            {
+                try { work(); }
+                catch (Exception ex) { error = ex; }
+                finally { done.Set(); }
+            });
+        }
+        catch (InvalidOperationException)
+        {
+            throw new ObjectDisposedException(nameof(PrologEngine));
+        }
+
+        done.Wait();
+        if (error != null)
+        {
+            ExceptionDispatchInfo.Capture(error).Throw();
+        }
+    }
+
+    /// <inheritdoc cref="RunOnPrologThread(Action)"/>
+    internal T RunOnPrologThread<T>(Func<T> work)
+    {
+        ThrowIfDisposed();
+
+        if (Thread.CurrentThread == _prologThread)
+        {
+            return work();
+        }
+
+        using ManualResetEventSlim done = new(false);
+        T result = default!;
+        Exception? error = null;
+
+        try
+        {
+            _workQueue.Add(() =>
+            {
+                try { result = work(); }
+                catch (Exception ex) { error = ex; }
+                finally { done.Set(); }
+            });
+        }
+        catch (InvalidOperationException)
+        {
+            throw new ObjectDisposedException(nameof(PrologEngine));
+        }
+
+        done.Wait();
+        if (error != null)
+        {
+            ExceptionDispatchInfo.Capture(error).Throw();
+        }
+
+        return result;
+    }
+
     private static unsafe void InitializeNative(string[]? args)
     {
+        // Skip if already initialized (e.g. by a host process).
+        if (SwiPrologNative.PL_is_initialised(null, null) != 0)
+        {
+            return;
+        }
+
         // SWI-Prolog requires argv[0] to be the program name.
         string[] fullArgs = args is { Length: > 0 }
             ? ["swipl", .. args]
@@ -121,12 +244,14 @@ public sealed class PrologEngine : IDisposable
     /// <exception cref="PrologException">Thrown if the file cannot be loaded.</exception>
     public void LoadFile(string path)
     {
-        ThrowIfDisposed();
-        string escaped = EscapeSingleQuotes(path);
-        if (!Call($"consult('{escaped}')"))
+        RunOnPrologThread(() =>
         {
-            throw new PrologException($"consult/1 failed for: {path}");
-        }
+            string escaped = EscapeSingleQuotes(path);
+            if (!CallCore($"consult('{escaped}')"))
+            {
+                throw new PrologException($"consult/1 failed for: {path}");
+            }
+        });
     }
 
     /// <summary>
@@ -139,43 +264,7 @@ public sealed class PrologEngine : IDisposable
     /// <exception cref="PrologException">
     /// Thrown if the goal string cannot be parsed or if Prolog raises an exception.
     /// </exception>
-    public bool Call(string goal)
-    {
-        ThrowIfDisposed();
-
-        byte[] goalBytes = Encoding.UTF8.GetBytes(goal + "\0");
-
-        unsafe
-        {
-            fixed (byte* goalPtr = goalBytes)
-            {
-                nuint termRef = SwiPrologNative.PL_new_term_ref();
-
-                if (SwiPrologNative.PL_chars_to_term((sbyte*)goalPtr, termRef) == 0)
-                {
-                    throw new PrologException($"Failed to parse Prolog goal: {goal}");
-                }
-
-                int rc = SwiPrologNative.PL_call(termRef, null);
-
-                if (rc == 0)
-                {
-                    // Check whether it was a Prolog exception or just failure.
-                    nuint exTerm = SwiPrologNative.PL_exception(null);
-                    if (exTerm != 0)
-                    {
-                        string? msg = TryTermToString(exTerm);
-                        SwiPrologNative.PL_clear_exception();
-                        throw new PrologException("Prolog exception during Call", msg);
-                    }
-
-                    return false;
-                }
-
-                return true;
-            }
-        }
-    }
+    public bool Call(string goal) => RunOnPrologThread(() => CallCore(goal));
 
     /// <summary>
     /// Opens a Prolog query for the given goal. Variables in the goal are automatically
@@ -188,11 +277,8 @@ public sealed class PrologEngine : IDisposable
     /// A <see cref="PrologQuery"/> that must be disposed after use.
     /// </returns>
     /// <exception cref="PrologException">Thrown if the goal cannot be parsed.</exception>
-    public PrologQuery OpenQuery(string goal)
-    {
-        ThrowIfDisposed();
-        return new PrologQuery(goal);
-    }
+    public PrologQuery OpenQuery(string goal) =>
+        RunOnPrologThread(() => new PrologQuery(goal, this));
 
     /// <inheritdoc/>
     public void Dispose()
@@ -207,7 +293,41 @@ public sealed class PrologEngine : IDisposable
             _disposed = true;
             _instance = null;
 
-            unsafe { SwiPrologNative.PL_cleanup(0); }
+            // Signal the work loop to stop; PL_cleanup runs at the end of the thread.
+            _workQueue.CompleteAdding();
+            _prologThread.Join();
+        }
+    }
+
+    private unsafe bool CallCore(string goal)
+    {
+        byte[] goalBytes = Encoding.UTF8.GetBytes(goal + "\0");
+
+        fixed (byte* goalPtr = goalBytes)
+        {
+            nuint termRef = SwiPrologNative.PL_new_term_ref();
+
+            if (SwiPrologNative.PL_chars_to_term((sbyte*)goalPtr, termRef) == 0)
+            {
+                throw new PrologException($"Failed to parse Prolog goal: {goal}");
+            }
+
+            int rc = SwiPrologNative.PL_call(termRef, null);
+
+            if (rc == 0)
+            {
+                nuint exTerm = SwiPrologNative.PL_exception(null);
+                if (exTerm != 0)
+                {
+                    string? msg = TryTermToString(exTerm);
+                    SwiPrologNative.PL_clear_exception();
+                    throw new PrologException("Prolog exception during Call", msg);
+                }
+
+                return false;
+            }
+
+            return true;
         }
     }
 
@@ -219,7 +339,7 @@ public sealed class PrologEngine : IDisposable
     private static string EscapeSingleQuotes(string path) =>
         path.Replace("'", "\\'");
 
-    private static unsafe string? TryTermToString(nuint termRef)
+    internal static unsafe string? TryTermToString(nuint termRef)
     {
         nuint frame = SwiPrologNative.PL_open_foreign_frame();
         try
@@ -254,7 +374,7 @@ public sealed class PrologEngine : IDisposable
                 }
                 finally
                 {
-                    SwiPrologNative.PL_close_query(qid);
+                    _ = SwiPrologNative.PL_close_query(qid);
                 }
             }
         }
