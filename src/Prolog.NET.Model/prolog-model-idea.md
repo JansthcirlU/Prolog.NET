@@ -53,7 +53,7 @@ public static class Odd
 ```
 
 Given each defined relationship, including nested ones inside compound definitions, the preceding snippet aims to represent each possible argument type that can go into each relationship.
-This means that `Even` must correspond with the argument types that can go inside the `even` rule and that `Odd` must correspond with the argument types that can go inside the `odd` rule.
+This means that `IEven` must correspond with the argument types that can go inside the `even` rule and that `IOdd` must correspond with the argument types that can go inside the `odd` rule.
 
 ### Type-safe queries
 
@@ -100,7 +100,7 @@ public static class Odd
 
     // Represents a query on the 'odd' rule
     public sealed record Query<TOdd>(QueryArgument<TOdd> Odd) where TOdd : struct, IOdd;
-    public static Query<Any<U>> QueryOdd<U>(QueryArgument<Any<U>> odd) => new(odd);
+    public static Query<Any<U>> QueryAny<U>(QueryArgument<Any<U>> odd) => new(odd);
     public static Query<S<E>> QueryS<E>(QueryArgument<S<E>> s) where E : Even.IEven => new(s);
 }
 ```
