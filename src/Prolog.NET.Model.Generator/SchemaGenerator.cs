@@ -26,7 +26,7 @@ public sealed class SchemaGenerator : IIncrementalGenerator
     private static readonly DiagnosticDescriptor NotPartialDescriptor = new(
         id: "PNET001",
         title: "Type must be declared partial",
-        messageFormat: "Type '{0}' must be declared partial to use schema attributes.",
+        messageFormat: "Type '{0}' must be declared partial to use schema attributes",
         category: "Prolog.NET.Model.Generator",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
@@ -34,7 +34,7 @@ public sealed class SchemaGenerator : IIncrementalGenerator
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         // ── Relation pipeline ─────────────────────────────────────────────────
-        var relations = context.SyntaxProvider
+        IncrementalValuesProvider<RelationModel> relations = context.SyntaxProvider
             .ForAttributeWithMetadataName(
                 "Prolog.NET.Model.PrologRelationNameAttribute",
                 predicate: static (node, _) =>
@@ -47,7 +47,7 @@ public sealed class SchemaGenerator : IIncrementalGenerator
             static (ctx, model) => EmitRelation(ctx, model));
 
         // ── Functor pipeline ──────────────────────────────────────────────────
-        var functors = context.SyntaxProvider
+        IncrementalValuesProvider<FunctorModel> functors = context.SyntaxProvider
             .CreateSyntaxProvider(
                 predicate: static (node, _) => HasPrologFunctorAttribute(node),
                 transform: static (ctx, _) => ExtractFunctorModel(ctx))
@@ -63,14 +63,18 @@ public sealed class SchemaGenerator : IIncrementalGenerator
     private static RelationModel? ExtractRelationModel(GeneratorAttributeSyntaxContext ctx)
     {
         if (ctx.TargetSymbol is not INamedTypeSymbol symbol)
+        {
             return null;
+        }
 
         if (!IsPartial(symbol, ctx))
+        {
             return null;
+        }
 
         // Prolog name from PrologRelationNameAttribute
         string? prologName = null;
-        foreach (var attr in symbol.GetAttributes())
+        foreach (AttributeData attr in symbol.GetAttributes())
         {
             if (attr.AttributeClass?.Name == "PrologRelationNameAttribute"
                 && attr.ConstructorArguments.Length == 1)
@@ -81,24 +85,31 @@ public sealed class SchemaGenerator : IIncrementalGenerator
         }
 
         if (prologName is null)
+        {
             return null;
+        }
 
         // Collect arities from all PrologRelationAttribute<...> instances
-        var arities = new List<int>();
-        foreach (var attr in symbol.GetAttributes())
+        List<int> arities = new();
+        foreach (AttributeData attr in symbol.GetAttributes())
         {
-            var attrClass = attr.AttributeClass;
-            if (attrClass is null) continue;
+            INamedTypeSymbol? attrClass = attr.AttributeClass;
+            if (attrClass is null)
+            {
+                continue;
+            }
 
             if (IsPrologRelationAttribute(attrClass))
             {
                 int arity = attrClass.TypeArguments.Length;
                 if (!arities.Contains(arity))
+                {
                     arities.Add(arity);
+                }
             }
         }
 
-        var ns = symbol.ContainingNamespace.IsGlobalNamespace
+        string ns = symbol.ContainingNamespace.IsGlobalNamespace
             ? ""
             : symbol.ContainingNamespace.ToDisplayString();
 
@@ -115,21 +126,31 @@ public sealed class SchemaGenerator : IIncrementalGenerator
             _ => null,
         };
 
-        if (attrLists is null) return false;
+        if (attrLists is null)
+        {
+            return false;
+        }
 
-        foreach (var list in attrLists)
-            foreach (var attr in list.Attributes)
+        foreach (AttributeListSyntax list in attrLists)
+        {
+            foreach (AttributeSyntax attr in list.Attributes)
             {
-                var name = attr.Name.ToString();
+                string name = attr.Name.ToString();
                 // Strip generic type args from name for comparison
-                var simpleName = name.Contains('<') ? name.Substring(0, name.IndexOf('<')) : name;
+                string simpleName = name.Contains('<') ? name.Substring(0, name.IndexOf('<')) : name;
                 // Strip leading namespace qualifiers
-                var lastDot = simpleName.LastIndexOf('.');
-                if (lastDot >= 0) simpleName = simpleName.Substring(lastDot + 1);
+                int lastDot = simpleName.LastIndexOf('.');
+                if (lastDot >= 0)
+                {
+                    simpleName = simpleName.Substring(lastDot + 1);
+                }
 
                 if (simpleName == "PrologFunctor" || simpleName == "PrologFunctorAttribute")
+                {
                     return true;
+                }
             }
+        }
 
         return false;
     }
@@ -137,7 +158,9 @@ public sealed class SchemaGenerator : IIncrementalGenerator
     private static FunctorModel? ExtractFunctorModel(GeneratorSyntaxContext ctx)
     {
         if (ctx.SemanticModel.GetDeclaredSymbol(ctx.Node) is not INamedTypeSymbol symbol)
+        {
             return null;
+        }
 
         if (!IsPartialFromSyntax(ctx.Node))
         {
@@ -149,10 +172,14 @@ public sealed class SchemaGenerator : IIncrementalGenerator
         // Find the first PrologFunctorAttribute<...>
         INamedTypeSymbol? attrClass = null;
         AttributeData? functorAttr = null;
-        foreach (var attr in symbol.GetAttributes())
+        foreach (AttributeData attr in symbol.GetAttributes())
         {
-            var cls = attr.AttributeClass;
-            if (cls is null) continue;
+            INamedTypeSymbol? cls = attr.AttributeClass;
+            if (cls is null)
+            {
+                continue;
+            }
+
             if (cls.Name.StartsWith("PrologFunctorAttribute") && cls.IsGenericType)
             {
                 attrClass = cls;
@@ -162,17 +189,24 @@ public sealed class SchemaGenerator : IIncrementalGenerator
         }
 
         if (functorAttr is null || attrClass is null)
+        {
             return null;
+        }
 
         if (functorAttr.ConstructorArguments.Length == 0)
+        {
             return null;
+        }
 
-        var prologName = functorAttr.ConstructorArguments[0].Value as string;
-        if (prologName is null) return null;
+        string? prologName = functorAttr.ConstructorArguments[0].Value as string;
+        if (prologName is null)
+        {
+            return null;
+        }
 
         int arity = attrClass.TypeArguments.Length;
 
-        var ns = symbol.ContainingNamespace.IsGlobalNamespace
+        string ns = symbol.ContainingNamespace.IsGlobalNamespace
             ? ""
             : symbol.ContainingNamespace.ToDisplayString();
 
@@ -182,21 +216,26 @@ public sealed class SchemaGenerator : IIncrementalGenerator
     private static bool IsPrologRelationAttribute(INamedTypeSymbol attrClass)
     {
         // Matches PrologRelationAttribute, PrologRelationAttribute<T1>, etc.
-        var name = attrClass.Name;
-        if (name != "PrologRelationAttribute") return false;
+        string name = attrClass.Name;
+        if (name != "PrologRelationAttribute")
+        {
+            return false;
+        }
 
         // Check it's in Prolog.NET.Model namespace
-        var ns = attrClass.ContainingNamespace?.ToDisplayString();
+        string? ns = attrClass.ContainingNamespace?.ToDisplayString();
         return ns == "Prolog.NET.Model";
     }
 
     private static bool IsPartial(INamedTypeSymbol symbol, GeneratorAttributeSyntaxContext ctx)
     {
-        foreach (var syntaxRef in symbol.DeclaringSyntaxReferences)
+        foreach (SyntaxReference syntaxRef in symbol.DeclaringSyntaxReferences)
         {
-            var syntax = syntaxRef.GetSyntax();
+            SyntaxNode syntax = syntaxRef.GetSyntax();
             if (IsPartialFromSyntax(syntax))
+            {
                 return true;
+            }
         }
 
         ctx.SemanticModel.Compilation.GetDiagnostics(); // force compilation (no-op)
@@ -206,7 +245,7 @@ public sealed class SchemaGenerator : IIncrementalGenerator
 
     private static bool IsPartialFromSyntax(SyntaxNode node)
     {
-        var modifiers = node switch
+        SyntaxTokenList modifiers = node switch
         {
             RecordDeclarationSyntax r => r.Modifiers,
             ClassDeclarationSyntax c => c.Modifiers,
@@ -220,7 +259,7 @@ public sealed class SchemaGenerator : IIncrementalGenerator
 
     private static void EmitRelation(SourceProductionContext ctx, RelationModel model)
     {
-        var sb = new StringBuilder();
+        StringBuilder sb = new();
         sb.AppendLine("// <auto-generated/>");
         sb.AppendLine("#nullable enable");
         sb.AppendLine();
@@ -236,12 +275,12 @@ public sealed class SchemaGenerator : IIncrementalGenerator
 
         foreach (int arity in model.Arities)
         {
-            var paramList = string.Join(", ",
+            string paramList = string.Join(", ",
                 Enumerable.Range(0, arity).Select(i => $"global::Prolog.NET.Model.PrologTerm arg{i}"));
-            var argList = string.Join(", ",
+            string argList = string.Join(", ",
                 Enumerable.Range(0, arity).Select(i => $"arg{i}"));
 
-            var arrayLiteral = arity == 0 ? "[]" : $"[{argList}]";
+            string arrayLiteral = arity == 0 ? "[]" : $"[{argList}]";
 
             sb.AppendLine();
             sb.AppendLine($"    public static global::Prolog.NET.Model.PrologFact Fact({paramList})");
@@ -263,7 +302,7 @@ public sealed class SchemaGenerator : IIncrementalGenerator
 
     private static void EmitFunctor(SourceProductionContext ctx, FunctorModel model)
     {
-        var sb = new StringBuilder();
+        StringBuilder sb = new();
         sb.AppendLine("// <auto-generated/>");
         sb.AppendLine("#nullable enable");
         sb.AppendLine();
@@ -277,12 +316,12 @@ public sealed class SchemaGenerator : IIncrementalGenerator
         sb.AppendLine($"public partial record {model.TypeName}");
         sb.AppendLine("{");
 
-        var paramList = string.Join(", ",
+        string paramList = string.Join(", ",
             Enumerable.Range(0, model.Arity).Select(i => $"global::Prolog.NET.Model.PrologTerm arg{i}"));
-        var argList = string.Join(", ",
+        string argList = string.Join(", ",
             Enumerable.Range(0, model.Arity).Select(i => $"arg{i}"));
 
-        var arrayLiteral = model.Arity == 0 ? "[]" : $"[{argList}]";
+        string arrayLiteral = model.Arity == 0 ? "[]" : $"[{argList}]";
 
         sb.AppendLine();
         sb.AppendLine($"    public static global::Prolog.NET.Model.PrologTerm Of({paramList})");

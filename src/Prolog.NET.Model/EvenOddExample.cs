@@ -19,7 +19,7 @@ public static class EvenOddExample
 {
     public static PrologDatabase Build()
     {
-        var zero = Prolog.Atom.CreateInt(0);
+        PrologIntAtom zero = Prolog.Atom.CreateInt(0);
 
         return Prolog.Database.Create([
             Even.Fact(zero),

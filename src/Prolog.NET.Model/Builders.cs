@@ -26,9 +26,15 @@ public sealed class DefinitionBuilder
     internal PrologRuleClause Build(string functor)
     {
         if (_args is null)
+        {
             throw new InvalidOperationException("Arguments must be set before building a rule clause.");
+        }
+
         if (_body is null)
+        {
             throw new InvalidOperationException("Body must be set before building a rule clause.");
+        }
+
         return new PrologRuleClause(functor, _args, _body);
     }
 
@@ -36,7 +42,7 @@ public sealed class DefinitionBuilder
         string n1,
         Func<PrologVariable, DefinitionBuilder, DefinitionBuilder> build)
     {
-        var v1 = new PrologVariable(n1);
+        PrologVariable v1 = new(n1);
         return build(v1, this);
     }
 
@@ -44,8 +50,8 @@ public sealed class DefinitionBuilder
         string n1, string n2,
         Func<PrologVariable, PrologVariable, DefinitionBuilder, DefinitionBuilder> build)
     {
-        var v1 = new PrologVariable(n1);
-        var v2 = new PrologVariable(n2);
+        PrologVariable v1 = new(n1);
+        PrologVariable v2 = new(n2);
         return build(v1, v2, this);
     }
 
@@ -53,9 +59,9 @@ public sealed class DefinitionBuilder
         string n1, string n2, string n3,
         Func<PrologVariable, PrologVariable, PrologVariable, DefinitionBuilder, DefinitionBuilder> build)
     {
-        var v1 = new PrologVariable(n1);
-        var v2 = new PrologVariable(n2);
-        var v3 = new PrologVariable(n3);
+        PrologVariable v1 = new(n1);
+        PrologVariable v2 = new(n2);
+        PrologVariable v3 = new(n3);
         return build(v1, v2, v3, this);
     }
 
@@ -63,10 +69,10 @@ public sealed class DefinitionBuilder
         string n1, string n2, string n3, string n4,
         Func<PrologVariable, PrologVariable, PrologVariable, PrologVariable, DefinitionBuilder, DefinitionBuilder> build)
     {
-        var v1 = new PrologVariable(n1);
-        var v2 = new PrologVariable(n2);
-        var v3 = new PrologVariable(n3);
-        var v4 = new PrologVariable(n4);
+        PrologVariable v1 = new(n1);
+        PrologVariable v2 = new(n2);
+        PrologVariable v3 = new(n3);
+        PrologVariable v4 = new(n4);
         return build(v1, v2, v3, v4, this);
     }
 }
@@ -83,7 +89,7 @@ public sealed class RuleBuilder
 
     public RuleBuilder AddDefinition(Func<DefinitionBuilder, DefinitionBuilder> build)
     {
-        var db = new DefinitionBuilder();
+        DefinitionBuilder db = new();
         build(db);
         _definitions.Add(db.Build(_functor));
         return this;

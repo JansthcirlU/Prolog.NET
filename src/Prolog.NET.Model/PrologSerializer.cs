@@ -8,8 +8,8 @@ public static class PrologSerializer
     {
         ArgumentNullException.ThrowIfNull(database);
 
-        var sb = new StringBuilder();
-        foreach (var entry in database.Entries)
+        StringBuilder sb = new();
+        foreach (PrologDatabaseEntry entry in database.Entries)
         {
             sb.AppendLine(SerializeEntry(entry));
         }
@@ -46,10 +46,15 @@ public static class PrologSerializer
     {
         if (goal is Conjunction conj)
         {
-            foreach (var left in FlattenConjunction(conj.Left))
+            foreach (BodyGoal left in FlattenConjunction(conj.Left))
+            {
                 yield return left;
-            foreach (var right in FlattenConjunction(conj.Right))
+            }
+
+            foreach (BodyGoal right in FlattenConjunction(conj.Right))
+            {
                 yield return right;
+            }
         }
         else
         {
@@ -59,25 +64,39 @@ public static class PrologSerializer
 
     private static string SerializeAtom(string name)
     {
-        if (IsUnquotedAtom(name)) return name;
+        if (IsUnquotedAtom(name))
+        {
+            return name;
+        }
+
         return "'" + name.Replace("\\", "\\\\").Replace("'", "\\'") + "'";
     }
 
     private static bool IsUnquotedAtom(string name)
     {
-        if (name.Length == 0) return false;
+        if (name.Length == 0)
+        {
+            return false;
+        }
 
         // Special atoms that never need quoting.
-        if (name is "[]" or "{}" or "!") return true;
+        if (name is "[]" or "{}" or "!")
+        {
+            return true;
+        }
 
         // Identifier atom: starts with lowercase, rest are letters/digits/underscores.
         if (char.IsLower(name[0]) && name.All(c => char.IsLetterOrDigit(c) || c == '_'))
+        {
             return true;
+        }
 
         // Symbolic atom: consists entirely of graphic characters.
         const string graphicChars = "#&*+-./:<=>?@\\^~";
         if (name.All(c => graphicChars.Contains(c)))
+        {
             return true;
+        }
 
         return false;
     }
