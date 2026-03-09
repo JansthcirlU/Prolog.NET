@@ -238,7 +238,7 @@ public sealed class PrologQuery : IDisposable
     // so callers on other threads get safe string values rather than raw term handles.
     private PrologSolution MakeSnapshot()
     {
-        Dictionary<string, string> termStrings = new(_variables.Count);
+        Dictionary<string, string> termStrings = [];
         foreach ((string name, nuint termRef) in _variables)
         {
             termStrings[name] = PrologEngine.TryTermToString(termRef) ?? "<term>";

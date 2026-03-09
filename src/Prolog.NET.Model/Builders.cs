@@ -80,7 +80,7 @@ public sealed class DefinitionBuilder
 public sealed class RuleBuilder
 {
     private readonly string _functor;
-    private readonly List<PrologRuleClause> _definitions = new();
+    private readonly List<PrologRuleClause> _definitions = [];
 
     public RuleBuilder(string functor)
     {
