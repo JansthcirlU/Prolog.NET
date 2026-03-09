@@ -90,7 +90,7 @@ public sealed class SchemaGenerator : IIncrementalGenerator
         }
 
         // Collect arities from all PrologRelationAttribute<...> instances
-        List<int> arities = new();
+        List<int> arities = [];
         foreach (AttributeData attr in symbol.GetAttributes())
         {
             INamedTypeSymbol? attrClass = attr.AttributeClass;
