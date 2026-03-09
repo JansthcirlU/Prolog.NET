@@ -80,13 +80,16 @@ public class PrologActor(PrologEngine engine) : IActor
     {
         try
         {
-            var result = new QueryResult();
+            QueryResult result = new();
             using PrologQuery query = engine.OpenQuery(msg.Goal);
             foreach (PrologSolution solution in query.Solutions)
             {
-                var row = new SolutionRow();
+                SolutionRow row = new();
                 foreach (string name in solution.VariableNames)
+                {
                     row.Variables[name] = solution[name].ToString();
+                }
+
                 result.Solutions.Add(row);
             }
 
@@ -137,13 +140,13 @@ public class PrologActor(PrologEngine engine) : IActor
                 {
                     _ = _openQueries.Remove(id);
                     query.Dispose();
-                    var result = new FinalSolutionResult();
+                    FinalSolutionResult result = new();
                     result.Variables.Add(vars);
                     context.Respond(new NextSolutionResponse { FinalSolution = result });
                 }
                 else
                 {
-                    var result = new SolutionResult();
+                    SolutionResult result = new();
                     result.Variables.Add(vars);
                     context.Respond(new NextSolutionResponse { Solution = result });
                 }
