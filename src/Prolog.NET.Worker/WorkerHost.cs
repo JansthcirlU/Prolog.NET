@@ -24,7 +24,9 @@ internal sealed class WorkerHost(ActorSystem actorSystem, IServiceProvider sp) :
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         if (_prologPid != null)
+        {
             await actorSystem.Root.StopAsync(_prologPid);
+        }
 
         await actorSystem.Remote().ShutdownAsync();
     }
