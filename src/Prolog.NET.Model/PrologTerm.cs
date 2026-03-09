@@ -4,16 +4,28 @@ namespace Prolog.NET.Model;
 public abstract record PrologTerm;
 
 /// <summary>A Prolog atom, e.g. <c>foo</c>, <c>'Hello World'</c>, <c>[]</c>.</summary>
-public sealed record PrologAtom(AtomName Name) : PrologTerm;
+public sealed record PrologAtom(AtomName Name) : PrologTerm
+{
+    public static PrologAtom Of(string name) => new(new AtomName(name));
+}
 
 /// <summary>A Prolog variable, e.g. <c>X</c>, <c>_G123</c>, <c>_</c>.</summary>
-public sealed record PrologVariable(VariableName Name) : PrologTerm;
+public sealed record PrologVariable(VariableName Name) : PrologTerm
+{
+    public static PrologVariable Of(string name) => new(new VariableName(name));
+}
 
 /// <summary>A Prolog integer, e.g. <c>42</c>.</summary>
-public sealed record PrologInteger(long Value) : PrologTerm;
+public sealed record PrologInteger(long Value) : PrologTerm
+{
+    public static PrologInteger Of(long value) => new(value);
+}
 
 /// <summary>A Prolog floating-point number, e.g. <c>3.14</c>.</summary>
-public sealed record PrologFloat(double Value) : PrologTerm;
+public sealed record PrologFloat(double Value) : PrologTerm
+{
+    public static PrologFloat Of(double value) => new(value);
+}
 
 /// <summary>
 /// A Prolog compound term, e.g. <c>f(a, b)</c>. Must have at least one argument;
@@ -36,6 +48,9 @@ public sealed record PrologCompoundTerm : PrologTerm
         Functor = functor;
         Arguments = arguments;
     }
+
+    public static PrologCompoundTerm Of(string functor, params PrologTerm[] arguments)
+        => new(new AtomName(functor), arguments);
 }
 
 /// <summary>

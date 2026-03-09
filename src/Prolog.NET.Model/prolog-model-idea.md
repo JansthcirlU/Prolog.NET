@@ -107,6 +107,11 @@ public static class Odd
 
 These additional types aren't meant to be used to recreate a type-safe Prolog implementation, but having a type to represent the concept of a query will allow us to write more complex rules in a predictable manner, avoiding easy-to-miss type mismatches and structural incompatibilities.
 
+For more complex rule hierarchies, a query could contain nested variables, something akin to `f(a, g(X), Y)` where only `X` and `Y` are variables without needing to write `QueryArgument<F>` or something. Initially, I thought of using the `out` parameter, but I think this approach is more scalable.
+
 ### Code generation
 
-All of this logic of course hinges on a type hierarchy that allows code generation appropriately.
+All of this logic of course hinges on a type hierarchy that allows code generation, for example via source generators, to create these additional relationship argument types which can then be re-used to create additional queries or even new rules. The current types work to represent the different semantic constructs in Prolog, but it might not map nicely onto the "relations" representation. Having a more relation-argument-oriented type hierarchy might make it easier to gather relations with the same name and combine all the different definitions together to generate the output code for the args.
+
+## Encoding relations into types
+

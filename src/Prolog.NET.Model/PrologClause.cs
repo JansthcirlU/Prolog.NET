@@ -20,6 +20,14 @@ public sealed record PrologFact : PrologClause
                 nameof(head));
         Head = head;
     }
+
+    /// <summary>Creates a fact with a zero-arity head atom.</summary>
+    public static PrologFact Of(string functor)
+        => new(PrologAtom.Of(functor));
+
+    /// <summary>Creates a fact with a compound head.</summary>
+    public static PrologFact Of(string functor, params PrologTerm[] arguments)
+        => new(PrologCompoundTerm.Of(functor, arguments));
 }
 
 /// <summary>
@@ -47,6 +55,29 @@ public sealed record PrologRule : PrologClause
         Head = head;
         Body = body;
     }
+
+    /// <summary>
+    /// Creates a rule with an explicit head argument list and body goal list (no lambdas).
+    /// </summary>
+    public static PrologRule Of(
+        string functor,
+        IReadOnlyList<PrologTerm> headArguments,
+        IReadOnlyList<PrologTerm> body)
+        => new(PrologCompoundTerm.Of(functor, [.. headArguments]), body);
+
+    /// <summary>
+    /// Creates a rule with a single named variable. The lambda receives the variable and
+    /// returns <c>(headArgs, bodyGoals)</c> so the variable name is captured once.
+    /// </summary>
+    public static PrologRule Create(
+        string functor,
+        string varName,
+        Func<PrologVariable, (IReadOnlyList<PrologTerm> head, IReadOnlyList<PrologTerm> body)> build)
+    {
+        var v = PrologVariable.Of(varName);
+        var (headArgs, body) = build(v);
+        return new(PrologCompoundTerm.Of(functor, [.. headArgs]), body);
+    }
 }
 
 /// <summary>
@@ -66,4 +97,10 @@ public sealed record PrologDirective : PrologClause
                 nameof(goal));
         Goal = goal;
     }
+
+    public static PrologDirective Of(string functor)
+        => new(PrologAtom.Of(functor));
+
+    public static PrologDirective Of(string functor, params PrologTerm[] arguments)
+        => new(PrologCompoundTerm.Of(functor, arguments));
 }
