@@ -12,13 +12,15 @@ internal sealed record RelationModel(
     string TypeName,
     string Namespace,
     string PrologName,
-    IReadOnlyList<int> Arities);
+    IReadOnlyList<int> Arities,
+    string? Module = null);
 
 internal sealed record FunctorModel(
     string TypeName,
     string Namespace,
     string PrologName,
-    int Arity);
+    int Arity,
+    string? Module = null);
 
 [Generator]
 public sealed class SchemaGenerator : IIncrementalGenerator
@@ -113,7 +115,18 @@ public sealed class SchemaGenerator : IIncrementalGenerator
             ? ""
             : symbol.ContainingNamespace.ToDisplayString();
 
-        return new RelationModel(symbol.Name, ns, prologName, arities);
+        string? moduleName = null;
+        foreach (AttributeData attr in symbol.GetAttributes())
+        {
+            if (attr.AttributeClass?.Name == "PrologModuleAttribute"
+                && attr.ConstructorArguments.Length == 1)
+            {
+                moduleName = attr.ConstructorArguments[0].Value as string;
+                break;
+            }
+        }
+
+        return new RelationModel(symbol.Name, ns, prologName, arities, moduleName);
     }
 
     private static bool HasPrologFunctorAttribute(SyntaxNode node)
@@ -210,7 +223,18 @@ public sealed class SchemaGenerator : IIncrementalGenerator
             ? ""
             : symbol.ContainingNamespace.ToDisplayString();
 
-        return new FunctorModel(symbol.Name, ns, prologName, arity);
+        string? moduleName = null;
+        foreach (AttributeData attr in symbol.GetAttributes())
+        {
+            if (attr.AttributeClass?.Name == "PrologModuleAttribute"
+                && attr.ConstructorArguments.Length == 1)
+            {
+                moduleName = attr.ConstructorArguments[0].Value as string;
+                break;
+            }
+        }
+
+        return new FunctorModel(symbol.Name, ns, prologName, arity, moduleName);
     }
 
     private static bool IsPrologRelationAttribute(INamedTypeSymbol attrClass)
@@ -286,9 +310,10 @@ public sealed class SchemaGenerator : IIncrementalGenerator
             sb.AppendLine($"    public static global::Prolog.NET.Model.PrologFact Fact({paramList})");
             sb.AppendLine($"        => new(\"{model.PrologName}\", {arrayLiteral});");
 
+            string moduleArg = model.Module is not null ? $", \"{model.Module}\"" : "";
             sb.AppendLine();
             sb.AppendLine($"    public static global::Prolog.NET.Model.BodyGoal Query({paramList})");
-            sb.AppendLine($"        => new global::Prolog.NET.Model.Call(\"{model.PrologName}\", {arrayLiteral});");
+            sb.AppendLine($"        => new global::Prolog.NET.Model.Call(\"{model.PrologName}\", {arrayLiteral}{moduleArg});");
         }
 
         sb.AppendLine();

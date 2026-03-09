@@ -7,7 +7,7 @@ PrologAtom marge = PrologDSL.Atom.Create("marge");
 PrologAtom bart = PrologDSL.Atom.Create("bart");
 PrologAtom lisa = PrologDSL.Atom.Create("lisa");
 
-PrologDatabase family = PrologDSL.Database.Create([
+PrologModule family = PrologDSL.Module.Create("family", [
     Male.Fact(homer),
     Male.Fact(bart),
     Female.Fact(marge),
@@ -21,6 +21,9 @@ PrologDatabase family = PrologDSL.Database.Create([
             .Variables("Father", "Child", (f, c, r) => r
                 .Arguments(f, c)
                 .Body(Parent.Query(f, c).And(Male.Query(f))))),
+]);
+
+PrologModule peano = PrologDSL.Module.Create("peano", [
     Even.Fact(zero),
     Even.Rule()
         .AddDefinition(rule => rule
@@ -34,4 +37,16 @@ PrologDatabase family = PrologDSL.Database.Create([
                 .Body(Even.Query(n)))),
 ]);
 
+PrologModule genealogy = PrologDSL.Module.Create("genealogy", [
+    Grandfather.Rule()
+        .AddDefinition(rule => rule
+            .Variables("GF", "P", "GC", (gf, p, gc, r) => r
+                .Arguments(gf, gc)
+                .Body(Father.Query(gf, p).And(Father.Query(p, gc))))),
+]);
+
 Console.Write(PrologSerializer.Serialize(family));
+Console.WriteLine();
+Console.Write(PrologSerializer.Serialize(genealogy));
+Console.WriteLine();
+Console.Write(PrologSerializer.Serialize(peano));

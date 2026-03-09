@@ -16,6 +16,81 @@ public static class PrologSerializer
         return sb.ToString();
     }
 
+    public static string Serialize(PrologModule module)
+    {
+        ArgumentNullException.ThrowIfNull(module);
+
+        IReadOnlyList<string> exports = module.Exports
+            ?? [..module.Database.Entries
+                .Select(e => e switch
+                {
+                    PrologFact f => $"{f.Functor}/{f.Args.Count}",
+                    PrologRuleClause r => $"{r.Functor}/{r.Args.Count}",
+                    _ => null
+                })
+                .OfType<string>()
+                .Distinct()];
+
+        List<string> imports = [..module.Database.Entries
+            .OfType<PrologRuleClause>()
+            .SelectMany(r => CollectImports(r.Body, module.Name))
+            .Distinct()];
+
+        StringBuilder sb = new();
+        sb.AppendLine($":- module({module.Name}, [{string.Join(", ", exports)}]).");
+        sb.AppendLine();
+
+        if (imports.Count > 0)
+        {
+            foreach (string import in imports)
+            {
+                sb.AppendLine($":- use_module({import}).");
+            }
+            sb.AppendLine();
+        }
+
+        foreach (PrologDatabaseEntry entry in module.Database.Entries)
+        {
+            sb.AppendLine(SerializeEntry(entry));
+        }
+
+        return sb.ToString();
+    }
+
+    private static IEnumerable<string> CollectImports(BodyGoal goal, string moduleName)
+    {
+        switch (goal)
+        {
+            case Call call when call.Module is not null && call.Module != moduleName:
+                yield return call.Module;
+                break;
+            case Conjunction conj:
+                foreach (string m in CollectImports(conj.Left, moduleName))
+                {
+                    yield return m;
+                }
+
+                foreach (string m in CollectImports(conj.Right, moduleName))
+                {
+                    yield return m;
+                }
+
+                break;
+            case Disjunction disj:
+                foreach (string m in CollectImports(disj.Left, moduleName))
+                {
+                    yield return m;
+                }
+
+                foreach (string m in CollectImports(disj.Right, moduleName))
+                {
+                    yield return m;
+                }
+
+                break;
+        }
+    }
+
     private static string SerializeEntry(PrologDatabaseEntry entry) => entry switch
     {
         PrologFact fact when fact.Args.Count == 0 => $"{SerializeAtom(fact.Functor)}.",

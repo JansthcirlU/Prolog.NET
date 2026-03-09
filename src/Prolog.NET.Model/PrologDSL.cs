@@ -13,4 +13,13 @@ public static class PrologDSL
         public static PrologDatabase Create(IReadOnlyList<PrologDatabaseItem> items)
             => new(items.SelectMany(i => i.Entries).ToList());
     }
+
+    public static class Module
+    {
+        public static PrologModule Create(
+            string name,
+            IReadOnlyList<PrologDatabaseItem> items,
+            IReadOnlyList<string>? exports = null)
+            => new(name, new PrologDatabase([.. items.SelectMany(i => i.Entries)]), exports);
+    }
 }
