@@ -19,9 +19,9 @@ public static class EvenOddExample
 {
     public static PrologDatabase Build()
     {
-        PrologIntAtom zero = Prolog.Atom.CreateInt(0);
+        PrologIntAtom zero = PrologDSL.Atom.CreateInt(0);
 
-        return Prolog.Database.Create([
+        return PrologDSL.Database.Create([
             Even.Fact(zero),
             Even.Rule()
                 .AddDefinition(rule => rule

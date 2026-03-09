@@ -1,15 +1,13 @@
 using Prolog.NET.Designer;
 using Prolog.NET.Model;
-using PrologDsl = Prolog.NET.Model.Prolog;
 
-PrologIntAtom zero = PrologDsl.Atom.CreateInt(0);
+PrologIntAtom zero = PrologDSL.Atom.CreateInt(0);
+PrologAtom homer = PrologDSL.Atom.Create("homer");
+PrologAtom marge = PrologDSL.Atom.Create("marge");
+PrologAtom bart = PrologDSL.Atom.Create("bart");
+PrologAtom lisa = PrologDSL.Atom.Create("lisa");
 
-PrologAtom homer = PrologDsl.Atom.Create("homer");
-PrologAtom marge = PrologDsl.Atom.Create("marge");
-PrologAtom bart  = PrologDsl.Atom.Create("bart");
-PrologAtom lisa  = PrologDsl.Atom.Create("lisa");
-
-PrologDatabase family = PrologDsl.Database.Create([
+PrologDatabase family = PrologDSL.Database.Create([
     Male.Fact(homer),
     Male.Fact(bart),
     Female.Fact(marge),

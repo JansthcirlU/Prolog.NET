@@ -1,6 +1,6 @@
 namespace Prolog.NET.Model;
 
-public static class Prolog
+public static class PrologDSL
 {
     public static class Atom
     {
