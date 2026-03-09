@@ -2,76 +2,61 @@ using System.Text;
 
 namespace Prolog.NET.Model;
 
-/// <summary>
-/// Serializes a <see cref="PrologDatabase"/> to a valid <c>.pl</c> file string.
-/// </summary>
 public static class PrologSerializer
 {
-    /// <summary>Serializes the database to a Prolog source string.</summary>
     public static string Serialize(PrologDatabase database)
     {
         ArgumentNullException.ThrowIfNull(database);
 
         var sb = new StringBuilder();
-        foreach (PrologClause clause in database.Clauses)
+        foreach (var entry in database.Entries)
         {
-            sb.AppendLine(SerializeClause(clause));
+            sb.AppendLine(SerializeEntry(entry));
         }
         return sb.ToString();
     }
 
-    private static string SerializeClause(PrologClause clause) => clause switch
+    private static string SerializeEntry(PrologDatabaseEntry entry) => entry switch
     {
-        PrologFact fact         => $"{SerializeTerm(fact.Head)}.",
-        PrologDirective dir     => $":- {SerializeTerm(dir.Goal)}.",
-        PrologRule rule         => SerializeRule(rule),
-        _                       => throw new ArgumentException($"Unknown clause type: {clause.GetType().Name}"),
+        PrologFact fact when fact.Args.Count == 0 => $"{SerializeAtom(fact.Functor)}.",
+        PrologFact fact => $"{SerializeAtom(fact.Functor)}({string.Join(", ", fact.Args.Select(SerializeTerm))}).",
+        PrologRuleClause rule => $"{SerializeAtom(rule.Functor)}({string.Join(", ", rule.Args.Select(SerializeTerm))}) :-\n    {SerializeBody(rule.Body)}.",
+        _ => throw new ArgumentException($"Unknown entry type: {entry.GetType().Name}"),
     };
-
-    private static string SerializeRule(PrologRule rule)
-    {
-        string head = SerializeTerm(rule.Head);
-        string body = string.Join(",\n    ", rule.Body.Select(SerializeTerm));
-        return $"{head} :-\n    {body}.";
-    }
 
     private static string SerializeTerm(PrologTerm term) => term switch
     {
-        PrologAtom atom                 => SerializeAtom(atom.Name.Value),
-        PrologVariable variable         => variable.Name.Value,
-        PrologInteger integer           => integer.Value.ToString(),
-        PrologFloat f                   => SerializeFloat(f.Value),
-        PrologCompoundTerm compound     => SerializeCompound(compound),
-        PrologList list                 => SerializeList(list),
-        PredicateIndicator indicator    => $"{SerializeAtom(indicator.Functor.Value)}/{indicator.Arity}",
-        _                               => throw new ArgumentException($"Unknown term type: {term.GetType().Name}"),
+        PrologAtom atom => SerializeAtom(atom.Name),
+        PrologIntAtom intAtom => intAtom.Value.ToString(),
+        PrologVariable variable => variable.Name,
+        PrologCompound compound => $"{SerializeAtom(compound.Functor)}({string.Join(", ", compound.Args.Select(SerializeTerm))})",
+        _ => throw new ArgumentException($"Unknown term type: {term.GetType().Name}"),
     };
 
-    private static string SerializeCompound(PrologCompoundTerm term)
+    private static string SerializeBody(BodyGoal goal) => goal switch
     {
-        string functor = SerializeAtom(term.Functor.Value);
-        string args = string.Join(", ", term.Arguments.Select(SerializeTerm));
-        return $"{functor}({args})";
+        True => "true",
+        Call call => $"{SerializeAtom(call.Functor)}({string.Join(", ", call.Args.Select(SerializeTerm))})",
+        Conjunction conj => string.Join(",\n    ", FlattenConjunction(conj).Select(SerializeBody)),
+        Disjunction disj => $"({SerializeBody(disj.Left)}\n    ; {SerializeBody(disj.Right)})",
+        _ => throw new ArgumentException($"Unknown body goal type: {goal.GetType().Name}"),
+    };
+
+    private static IEnumerable<BodyGoal> FlattenConjunction(BodyGoal goal)
+    {
+        if (goal is Conjunction conj)
+        {
+            foreach (var left in FlattenConjunction(conj.Left))
+                yield return left;
+            foreach (var right in FlattenConjunction(conj.Right))
+                yield return right;
+        }
+        else
+        {
+            yield return goal;
+        }
     }
 
-    private static string SerializeList(PrologList list)
-    {
-        if (list.Elements.Count == 0) return "[]";
-        string elements = string.Join(", ", list.Elements.Select(SerializeTerm));
-        return $"[{elements}]";
-    }
-
-    private static string SerializeFloat(double value)
-    {
-        string s = value.ToString("G");
-        // Ensure there is always a decimal point so Prolog reads it as a float.
-        return s.Contains('.') || s.Contains('E') ? s : s + ".0";
-    }
-
-    /// <summary>
-    /// Returns the atom serialized without quotes if it is a valid unquoted Prolog atom,
-    /// otherwise wraps it in single quotes with necessary escaping.
-    /// </summary>
     private static string SerializeAtom(string name)
     {
         if (IsUnquotedAtom(name)) return name;

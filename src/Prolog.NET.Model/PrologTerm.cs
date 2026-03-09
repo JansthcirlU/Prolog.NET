@@ -1,85 +1,55 @@
 namespace Prolog.NET.Model;
 
-/// <summary>Base type for all Prolog terms.</summary>
 public abstract record PrologTerm;
 
-/// <summary>A Prolog atom, e.g. <c>foo</c>, <c>'Hello World'</c>, <c>[]</c>.</summary>
-public sealed record PrologAtom(AtomName Name) : PrologTerm
+public sealed record PrologAtom : PrologTerm
 {
-    public static PrologAtom Of(string name) => new(new AtomName(name));
-}
+    public string Name { get; init; }
 
-/// <summary>A Prolog variable, e.g. <c>X</c>, <c>_G123</c>, <c>_</c>.</summary>
-public sealed record PrologVariable(VariableName Name) : PrologTerm
-{
-    public static PrologVariable Of(string name) => new(new VariableName(name));
-}
-
-/// <summary>A Prolog integer, e.g. <c>42</c>.</summary>
-public sealed record PrologInteger(long Value) : PrologTerm
-{
-    public static PrologInteger Of(long value) => new(value);
-}
-
-/// <summary>A Prolog floating-point number, e.g. <c>3.14</c>.</summary>
-public sealed record PrologFloat(double Value) : PrologTerm
-{
-    public static PrologFloat Of(double value) => new(value);
-}
-
-/// <summary>
-/// A Prolog compound term, e.g. <c>f(a, b)</c>. Must have at least one argument;
-/// use <see cref="PrologAtom"/> for zero-arity terms.
-/// </summary>
-public sealed record PrologCompoundTerm : PrologTerm
-{
-    public AtomName Functor { get; }
-    public IReadOnlyList<PrologTerm> Arguments { get; }
-
-    public PrologCompoundTerm(AtomName functor, IReadOnlyList<PrologTerm> arguments)
+    public PrologAtom(string name)
     {
-        ArgumentNullException.ThrowIfNull(arguments);
-        if (arguments.Count == 0)
+        if (string.IsNullOrEmpty(name))
+            throw new ArgumentException("Atom name must not be empty.", nameof(name));
+        Name = name;
+    }
+}
+
+public sealed record PrologIntAtom(long Value) : PrologTerm;
+
+public sealed record PrologVariable : PrologTerm
+{
+    public string Name { get; init; }
+
+    public PrologVariable(string name)
+    {
+        if (string.IsNullOrEmpty(name))
+            throw new ArgumentException("Variable name must not be empty.", nameof(name));
+        if (!char.IsUpper(name[0]) && name[0] != '_')
             throw new ArgumentException(
-                "A compound term must have at least one argument. " +
-                "Use PrologAtom for zero-arity terms.",
-                nameof(arguments));
-
-        Functor = functor;
-        Arguments = arguments;
-    }
-
-    public static PrologCompoundTerm Of(string functor, params PrologTerm[] arguments)
-        => new(new AtomName(functor), arguments);
-}
-
-/// <summary>
-/// A Prolog list, e.g. <c>[a, b, c]</c> or <c>[]</c> (the empty list).
-/// </summary>
-public sealed record PrologList : PrologTerm
-{
-    public IReadOnlyList<PrologTerm> Elements { get; }
-
-    public PrologList(IReadOnlyList<PrologTerm> elements)
-    {
-        ArgumentNullException.ThrowIfNull(elements);
-        Elements = elements;
+                "Variable name must start with an uppercase letter or underscore.", nameof(name));
+        foreach (char c in name.AsSpan(1))
+        {
+            if (!char.IsLetterOrDigit(c) && c != '_')
+                throw new ArgumentException(
+                    "Variable name must contain only letters, digits, or underscores after the first character.",
+                    nameof(name));
+        }
+        Name = name;
     }
 }
 
-/// <summary>
-/// A Prolog predicate indicator, e.g. <c>foo/2</c>. Commonly used in module export lists.
-/// </summary>
-public sealed record PredicateIndicator : PrologTerm
+public sealed record PrologCompound : PrologTerm
 {
-    public AtomName Functor { get; }
-    public int Arity { get; }
+    public string Functor { get; init; }
+    public IReadOnlyList<PrologTerm> Args { get; init; }
 
-    public PredicateIndicator(AtomName functor, int arity)
+    public PrologCompound(string functor, IReadOnlyList<PrologTerm> args)
     {
-        if (arity < 0)
-            throw new ArgumentOutOfRangeException(nameof(arity), "Arity must be non-negative.");
+        if (string.IsNullOrEmpty(functor))
+            throw new ArgumentException("Functor name must not be empty.", nameof(functor));
+        if (args.Count < 1)
+            throw new ArgumentException("Compound term must have at least one argument.", nameof(args));
         Functor = functor;
-        Arity = arity;
+        Args = args;
     }
 }
