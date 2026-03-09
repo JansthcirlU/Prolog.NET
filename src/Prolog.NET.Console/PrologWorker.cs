@@ -62,7 +62,7 @@ public sealed class PrologWorker(
 
             if (response != null)
             {
-                current    = response;
+                current = response;
                 statusLine = FormatResponse(response);
                 System.Console.Clear();
             }
@@ -74,7 +74,9 @@ public sealed class PrologWorker(
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
         if (_cliPid != null)
+        {
             await actorSystem.Root.StopAsync(_cliPid);
+        }
 
         await actorSystem.Remote().ShutdownAsync();
         await base.StopAsync(cancellationToken);
@@ -105,21 +107,26 @@ public sealed class PrologWorker(
         {
             AllowedAction? textAction = allowed.FirstOrDefault(a => a.RequiredInput == ActionInput.QueryText);
             if (textAction != null && k.KeyChar != '\0' && !char.IsControl(k.KeyChar))
+            {
                 matched = textAction;
+            }
         }
 
-        if (matched == null) return (null, false);
+        if (matched == null)
+        {
+            return (null, false);
+        }
 
         return matched.Action switch
         {
-            CliAction.Halt          => (null, true),
-            CliAction.LoadFile      => (await LoadFileAsync(matched, ct), false),
-            CliAction.UnloadFile    => (await SlotInputAsync(matched, s => new UnloadFileRequest(s), ct), false),
-            CliAction.SwitchSlot    => (await SlotInputAsync(matched, s => new SwitchSlotRequest(s), ct), false),
-            CliAction.SubmitQuery   => (await QueryAsync(k.KeyChar, ct), false),
-            CliAction.NextSolution  => (await RequestAsync<CliResponse>(new NextSolutionRequest(), ct), false),
-            CliAction.CloseQuery    => (await RequestAsync<CliResponse>(new CloseQueryRequest(), ct), false),
-            _                       => (null, false),
+            CliAction.Halt => (null, true),
+            CliAction.LoadFile => (await LoadFileAsync(matched, ct), false),
+            CliAction.UnloadFile => (await SlotInputAsync(matched, s => new UnloadFileRequest(s), ct), false),
+            CliAction.SwitchSlot => (await SlotInputAsync(matched, s => new SwitchSlotRequest(s), ct), false),
+            CliAction.SubmitQuery => (await QueryAsync(k.KeyChar, ct), false),
+            CliAction.NextSolution => (await RequestAsync<CliResponse>(new NextSolutionRequest(), ct), false),
+            CliAction.CloseQuery => (await RequestAsync<CliResponse>(new CloseQueryRequest(), ct), false),
+            _ => (null, false),
         };
     }
 
@@ -127,7 +134,11 @@ public sealed class PrologWorker(
     {
         System.Console.Write(action.InputPrompt ?? "File path: ");
         string path = (System.Console.ReadLine() ?? "").Trim();
-        if (string.IsNullOrEmpty(path)) return null;
+        if (string.IsNullOrEmpty(path))
+        {
+            return null;
+        }
+
         return await RequestAsync<CliResponse>(new LoadFileRequest(path), ct);
     }
 
@@ -136,7 +147,10 @@ public sealed class PrologWorker(
     {
         System.Console.Write(action.InputPrompt ?? "Slot (0-3): ");
         if (int.TryParse(System.Console.ReadLine(), out int slot))
+        {
             return await RequestAsync<CliResponse>(makeRequest(slot), ct);
+        }
+
         return null;
     }
 
@@ -169,11 +183,11 @@ public sealed class PrologWorker(
 
     private static string? FormatResponse(CliResponse response) => response switch
     {
-        CliError err                        => $"[!] {err.Error}",
-        CliSolution { IsFinal: true } sol   => $"  {FormatVars(sol.Variables)}  (last solution)",
-        CliSolution sol                     => $"  {FormatVars(sol.Variables)}",
-        CliNoMoreSolutions                  => "(no more solutions)",
-        _                                   => null,
+        CliError err => $"[!] {err.Error}",
+        CliSolution { IsFinal: true } sol => $"  {FormatVars(sol.Variables)}  (last solution)",
+        CliSolution sol => $"  {FormatVars(sol.Variables)}",
+        CliNoMoreSolutions => "(no more solutions)",
+        _ => null,
     };
 
     private static string FormatVars(IReadOnlyDictionary<string, string> variables)

@@ -45,10 +45,10 @@ public sealed class CliActor : IActor
 
     private IReadOnlyList<AllowedAction> GetAllowedActions() => GetState() switch
     {
-        CliState.NoSlot    => NoSlotActions,
+        CliState.NoSlot => NoSlotActions,
         CliState.SlotReady => SlotReadyActions,
         CliState.Streaming => StreamingActions,
-        _                  => [],
+        _ => [],
     };
 
     public async Task ReceiveAsync(IContext context)
@@ -105,7 +105,7 @@ public sealed class CliActor : IActor
 
             PID remotePid = PID.FromAddress($"127.0.0.1:{port}", PrologActorName);
 
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            using CancellationTokenSource cts = new(TimeSpan.FromSeconds(15));
             CallResult result = await context.System.Root.RequestAsync<CallResult>(
                 remotePid,
                 new LoadFileMessage { Path = msg.Path },
@@ -149,7 +149,9 @@ public sealed class CliActor : IActor
         _slots.Remove(msg.Slot);
 
         if (_activeSlot == msg.Slot)
+        {
             _activeSlot = _slots.Count > 0 ? _slots.Keys.Min() : null;
+        }
 
         context.Respond(new CliOk(GetState(), GetSlotInfos(), _activeSlot, GetAllowedActions()));
     }
@@ -184,7 +186,7 @@ public sealed class CliActor : IActor
 
         try
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            using CancellationTokenSource cts = new(TimeSpan.FromSeconds(30));
 
             OpenQueryResponse opened = await context.System.Root.RequestAsync<OpenQueryResponse>(
                 slot.RemotePid,
@@ -224,7 +226,7 @@ public sealed class CliActor : IActor
 
         try
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            using CancellationTokenSource cts = new(TimeSpan.FromSeconds(30));
             NextSolutionResponse next = await context.System.Root.RequestAsync<NextSolutionResponse>(
                 slot.RemotePid,
                 new NextSolutionMessage { QueryId = _openQueryId },
@@ -304,7 +306,9 @@ public sealed class CliActor : IActor
     private bool TryGetActiveSlot(out SlotState slot)
     {
         if (_activeSlot.HasValue && _slots.TryGetValue(_activeSlot.Value, out slot))
+        {
             return true;
+        }
 
         slot = default;
         return false;
@@ -312,17 +316,24 @@ public sealed class CliActor : IActor
 
     private CliState GetState()
     {
-        if (_activeSlot == null) return CliState.NoSlot;
-        if (_openQueryId != null) return CliState.Streaming;
+        if (_activeSlot == null)
+        {
+            return CliState.NoSlot;
+        }
+
+        if (_openQueryId != null)
+        {
+            return CliState.Streaming;
+        }
+
         return CliState.SlotReady;
     }
 
     private SlotInfo[] GetSlotInfos() =>
-        Enumerable.Range(0, MaxSlots)
+        [.. Enumerable.Range(0, MaxSlots)
             .Select(i => _slots.TryGetValue(i, out SlotState s)
                 ? new SlotInfo(i, s.FilePath)
-                : new SlotInfo(i, null))
-            .ToArray();
+                : new SlotInfo(i, null))];
 
     private static SystemProcess StartWorkerProcess(int port)
     {
@@ -330,9 +341,11 @@ public sealed class CliActor : IActor
             ?? Path.Combine(AppContext.BaseDirectory, "Prolog.NET.Worker");
 
         if (OperatingSystem.IsWindows())
+        {
             workerExe += ".exe";
+        }
 
-        var psi = new SystemProcessStartInfo(workerExe, $"--port {port}")
+        SystemProcessStartInfo psi = new(workerExe, $"--port {port}")
         {
             UseShellExecute = false,
         };
