@@ -41,7 +41,7 @@ public static class PrologSerializer
         sb.AppendLine($":- module({module.Name}, [{string.Join(", ", exports)}]).");
         sb.AppendLine();
 
-        List<string> imports = [..CollectImports(module)];
+        List<string> imports = [.. CollectImports(module)];
         if (imports.Count > 0)
         {
             foreach (string import in imports)
@@ -109,6 +109,7 @@ public static class PrologSerializer
     {
         PrologAtom atom => SerializeAtom(atom.Name),
         PrologIntAtom intAtom => intAtom.Value.ToString(),
+        PrologWildcard => "_",
         PrologVariable variable => variable.Name,
         PrologCompound compound => $"{SerializeAtom(compound.Functor)}({string.Join(", ", compound.Args.Select(SerializeTerm))})",
         _ => throw new ArgumentException($"Unknown term type: {term.GetType().Name}"),
@@ -117,6 +118,12 @@ public static class PrologSerializer
     private static string SerializeBody(BodyGoal goal, string? moduleName = null) => goal switch
     {
         True => "true",
+        Fail => "fail",
+        Cut => "!",
+        Negation neg => $"\\+({GoalAsArg(neg.Goal, moduleName)})",
+        IfThen ifthen => $"({SerializeBody(ifthen.Condition, moduleName)} -> {SerializeBody(ifthen.Then, moduleName)})",
+        Once once => $"once({GoalAsArg(once.Goal, moduleName)})",
+        BinaryGoal bin => $"{SerializeTerm(bin.Left)} {bin.Operator} {SerializeTerm(bin.Right)}",
         Call call when call.Module is not null && call.Module != moduleName
             => $"{call.Module}:{SerializeAtom(call.Functor)}({string.Join(", ", call.Args.Select(SerializeTerm))})",
         Call call => $"{SerializeAtom(call.Functor)}({string.Join(", ", call.Args.Select(SerializeTerm))})",
@@ -124,6 +131,11 @@ public static class PrologSerializer
         Disjunction disj => $"({SerializeBody(disj.Left, moduleName)}\n    ; {SerializeBody(disj.Right, moduleName)})",
         _ => throw new ArgumentException($"Unknown body goal type: {goal.GetType().Name}"),
     };
+
+    private static string GoalAsArg(BodyGoal goal, string? moduleName) =>
+        goal is Conjunction or Disjunction or IfThen
+            ? $"({SerializeBody(goal, moduleName)})"
+            : SerializeBody(goal, moduleName);
 
     private static IEnumerable<BodyGoal> FlattenConjunction(BodyGoal goal)
     {
