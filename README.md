@@ -32,3 +32,7 @@ All source lives under `src/`. Tests live under `tests/`. The solution file is `
 
 - **.NET 10.0** or later
 - **SWI-Prolog** must be installed and its native library discoverable at runtime for projects that depend on `Prolog.NET.Swipl` (`Swipl` and `Actors`). The `Model` and `Model.Generator` packages have no native dependency.
+
+## Development Notes
+
+This project was developed with the assistance of AI coding tools (Claude Code), under the supervision of the author. All design decisions, architecture choices, and code reviews were made by the author.
