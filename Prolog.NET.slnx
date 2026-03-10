@@ -8,4 +8,7 @@
     <Project Path="src/Prolog.NET.Swipl/Prolog.NET.Swipl.csproj" />
     <Project Path="src/Prolog.NET.Worker/Prolog.NET.Worker.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Prolog.NET.Model.Tests/Prolog.NET.Model.Tests.csproj" />
+  </Folder>
 </Solution>

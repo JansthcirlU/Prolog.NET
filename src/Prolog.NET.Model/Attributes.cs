@@ -1,5 +1,12 @@
 namespace Prolog.NET.Model;
 
+/// <summary>Declares the Prolog module this type belongs to.</summary>
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, AllowMultiple = false)]
+public sealed class PrologModuleAttribute(string name) : Attribute
+{
+    public string Name { get; } = name;
+}
+
 /// <summary>Declares the Prolog name of a relation type.</summary>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, AllowMultiple = false)]
 public sealed class PrologRelationNameAttribute(string Name) : Attribute

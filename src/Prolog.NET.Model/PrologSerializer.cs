@@ -16,13 +16,94 @@ public static class PrologSerializer
         return sb.ToString();
     }
 
-    private static string SerializeEntry(PrologDatabaseEntry entry) => entry switch
+    public static string Serialize(PrologModule module)
     {
-        PrologFact fact when fact.Args.Count == 0 => $"{SerializeAtom(fact.Functor)}.",
-        PrologFact fact => $"{SerializeAtom(fact.Functor)}({string.Join(", ", fact.Args.Select(SerializeTerm))}).",
-        PrologRuleClause rule => $"{SerializeAtom(rule.Functor)}({string.Join(", ", rule.Args.Select(SerializeTerm))}) :-\n    {SerializeBody(rule.Body)}.",
-        _ => throw new ArgumentException($"Unknown entry type: {entry.GetType().Name}"),
-    };
+        ArgumentNullException.ThrowIfNull(module);
+
+        IReadOnlyList<string> exports = [..module.Database.Entries
+                .Where(e => e is not PrologFact f || f.Module is null || f.Module == module.Name)
+                .Select(e => e switch
+                {
+                    PrologFact f => $"{f.Functor}/{f.Args.Count}",
+                    PrologRuleClause r => $"{r.Functor}/{r.Args.Count}",
+                    PrologMultifileDeclaration d => $"{d.Functor}/{d.Arity}",
+                    _ => null
+                })
+                .OfType<string>()
+                .Distinct()];
+
+        List<string> multifileDecls = [..module.Database.Entries
+            .OfType<PrologMultifileDeclaration>()
+            .Select(d => $"{d.Functor}/{d.Arity}")
+            .Distinct()];
+
+        StringBuilder sb = new();
+        sb.AppendLine($":- module({module.Name}, [{string.Join(", ", exports)}]).");
+        sb.AppendLine();
+
+        List<string> imports = [..CollectImports(module)];
+        if (imports.Count > 0)
+        {
+            foreach (string import in imports)
+            {
+                sb.AppendLine($":- use_module({import}).");
+            }
+            sb.AppendLine();
+        }
+
+        if (multifileDecls.Count > 0)
+        {
+            foreach (string decl in multifileDecls)
+            {
+                sb.AppendLine($":- multifile {decl}.");
+            }
+            sb.AppendLine();
+        }
+
+        foreach (PrologDatabaseEntry entry in module.Database.Entries
+            .Where(e => e is not PrologMultifileDeclaration))
+        {
+            sb.AppendLine(SerializeEntry(entry, module.Name));
+        }
+
+        return sb.ToString();
+    }
+
+    private static List<string> CollectImports(PrologModule module)
+        => [..module.Database.Entries
+            .SelectMany<PrologDatabaseEntry, string>(e => e switch
+            {
+                PrologRuleClause rule => CollectModulesFromGoal(rule.Body, module.Name),
+                PrologFact fact when fact.Module is not null && fact.Module != module.Name => [fact.Module],
+                _ => []
+            })
+            .Distinct()
+            .Order()];
+
+    private static IEnumerable<string> CollectModulesFromGoal(BodyGoal goal, string currentModule)
+        => goal switch
+        {
+            Call call when call.Module is not null && call.Module != currentModule => [call.Module],
+            Conjunction conj => CollectModulesFromGoal(conj.Left, currentModule)
+                .Concat(CollectModulesFromGoal(conj.Right, currentModule)),
+            Disjunction disj => CollectModulesFromGoal(disj.Left, currentModule)
+                .Concat(CollectModulesFromGoal(disj.Right, currentModule)),
+            _ => []
+        };
+
+    private static string SerializeEntry(PrologDatabaseEntry entry, string? moduleName = null)
+    {
+        string qualifier(PrologFact f) =>
+            f.Module is not null && f.Module != moduleName ? $"{f.Module}:" : "";
+
+        return entry switch
+        {
+            PrologFact fact when fact.Args.Count == 0 => $"{qualifier(fact)}{SerializeAtom(fact.Functor)}.",
+            PrologFact fact => $"{qualifier(fact)}{SerializeAtom(fact.Functor)}({string.Join(", ", fact.Args.Select(SerializeTerm))}).",
+            PrologRuleClause rule => $"{SerializeAtom(rule.Functor)}({string.Join(", ", rule.Args.Select(SerializeTerm))}) :-\n    {SerializeBody(rule.Body, moduleName)}.",
+            _ => throw new ArgumentException($"Unknown entry type: {entry.GetType().Name}"),
+        };
+    }
 
     private static string SerializeTerm(PrologTerm term) => term switch
     {
@@ -33,12 +114,14 @@ public static class PrologSerializer
         _ => throw new ArgumentException($"Unknown term type: {term.GetType().Name}"),
     };
 
-    private static string SerializeBody(BodyGoal goal) => goal switch
+    private static string SerializeBody(BodyGoal goal, string? moduleName = null) => goal switch
     {
         True => "true",
+        Call call when call.Module is not null && call.Module != moduleName
+            => $"{call.Module}:{SerializeAtom(call.Functor)}({string.Join(", ", call.Args.Select(SerializeTerm))})",
         Call call => $"{SerializeAtom(call.Functor)}({string.Join(", ", call.Args.Select(SerializeTerm))})",
-        Conjunction conj => string.Join(",\n    ", FlattenConjunction(conj).Select(SerializeBody)),
-        Disjunction disj => $"({SerializeBody(disj.Left)}\n    ; {SerializeBody(disj.Right)})",
+        Conjunction conj => string.Join(",\n    ", FlattenConjunction(conj).Select(g => SerializeBody(g, moduleName))),
+        Disjunction disj => $"({SerializeBody(disj.Left, moduleName)}\n    ; {SerializeBody(disj.Right, moduleName)})",
         _ => throw new ArgumentException($"Unknown body goal type: {goal.GetType().Name}"),
     };
 
