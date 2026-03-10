@@ -231,3 +231,9 @@ Goals support `.And()` and `.Or()` builder methods.
 | `PrologRelationNameAttribute(string)` | Names the relation and marks the type for the relation pipeline |
 | `PrologRelationAttribute<T1..T4>` | Declares an arity-N overload for `Fact` / `Query` / `Rule()` / `Multifile()` |
 | `PrologFunctorAttribute<T1..T4>` | Declares an arity-N `Of(…)` factory method returning `PrologCompound` |
+
+---
+
+## Development Notes
+
+This package was developed with the assistance of AI coding tools (Claude Code), under the supervision of the author. All design decisions, architecture choices, and code reviews were made by the author.

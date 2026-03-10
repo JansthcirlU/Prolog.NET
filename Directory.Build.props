@@ -2,5 +2,10 @@
   <PropertyGroup>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <!-- Shared NuGet metadata -->
+    <Authors>JansthcirlU</Authors>
+    <RepositoryUrl>https://github.com/JansthcirlU/Prolog.NET</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
 </Project>
