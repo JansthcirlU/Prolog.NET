@@ -20,6 +20,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Configure git safe directory
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
       - name: Check for changes since last publish
         id: changes
         run: |
@@ -70,5 +73,6 @@ jobs:
           VERSION=$(grep -oP '(?<=<Version>)[^<]+' src/Prolog.NET.Model.Generator/Prolog.NET.Model.Generator.csproj | tr -d '[:space:]')
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
           git tag "generator/v$VERSION"
           git push origin "generator/v$VERSION"
