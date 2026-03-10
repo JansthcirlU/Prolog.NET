@@ -13,5 +13,5 @@ public sealed class PrologDatabaseItem
 
     public static implicit operator PrologDatabaseItem(RuleBuilder builder) => builder.Build();
 
-    internal static PrologDatabaseItem FromEntries(IReadOnlyList<PrologDatabaseEntry> entries) => new(entries);
+    public static PrologDatabaseItem FromEntries(IReadOnlyList<PrologDatabaseEntry> entries) => new(entries);
 }

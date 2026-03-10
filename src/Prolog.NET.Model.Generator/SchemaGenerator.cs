@@ -13,14 +13,18 @@ internal sealed record RelationModel(
     string Namespace,
     string PrologName,
     IReadOnlyList<int> Arities,
-    string? Module = null);
+    string? Module = null,
+    string? ContainingTypeName = null,
+    bool ContainingTypeIsStatic = false);
 
 internal sealed record FunctorModel(
     string TypeName,
     string Namespace,
     string PrologName,
     int Arity,
-    string? Module = null);
+    string? Module = null,
+    string? ContainingTypeName = null,
+    bool ContainingTypeIsStatic = false);
 
 [Generator]
 public sealed class SchemaGenerator : IIncrementalGenerator
@@ -126,7 +130,15 @@ public sealed class SchemaGenerator : IIncrementalGenerator
             }
         }
 
-        return new RelationModel(symbol.Name, ns, prologName, arities, moduleName);
+        string? containingTypeName = null;
+        bool containingTypeIsStatic = false;
+        if (symbol.ContainingType is { } ct)
+        {
+            containingTypeName = ct.Name;
+            containingTypeIsStatic = ct.IsStatic;
+        }
+
+        return new RelationModel(symbol.Name, ns, prologName, arities, moduleName, containingTypeName, containingTypeIsStatic);
     }
 
     private static bool HasPrologFunctorAttribute(SyntaxNode node)
@@ -234,7 +246,15 @@ public sealed class SchemaGenerator : IIncrementalGenerator
             }
         }
 
-        return new FunctorModel(symbol.Name, ns, prologName, arity, moduleName);
+        string? containingTypeName = null;
+        bool containingTypeIsStatic = false;
+        if (symbol.ContainingType is { } ct)
+        {
+            containingTypeName = ct.Name;
+            containingTypeIsStatic = ct.IsStatic;
+        }
+
+        return new FunctorModel(symbol.Name, ns, prologName, arity, moduleName, containingTypeName, containingTypeIsStatic);
     }
 
     private static bool IsPrologRelationAttribute(INamedTypeSymbol attrClass)
@@ -294,35 +314,59 @@ public sealed class SchemaGenerator : IIncrementalGenerator
             sb.AppendLine();
         }
 
-        sb.AppendLine($"public partial record {model.TypeName}");
-        sb.AppendLine("{");
+        bool nested = model.ContainingTypeName is not null;
+        string i = nested ? "    " : "";
+        string ii = i + "    ";
+        string iii = ii + "    ";
+
+        if (nested)
+        {
+            string staticMod = model.ContainingTypeIsStatic ? "static " : "";
+            sb.AppendLine($"public {staticMod}partial class {model.ContainingTypeName}");
+            sb.AppendLine("{");
+        }
+
+        sb.AppendLine($"{i}public partial record {model.TypeName}");
+        sb.AppendLine($"{i}{{");
 
         foreach (int arity in model.Arities)
         {
             string paramList = string.Join(", ",
-                Enumerable.Range(0, arity).Select(i => $"global::Prolog.NET.Model.PrologTerm arg{i}"));
+                Enumerable.Range(0, arity).Select(idx => $"global::Prolog.NET.Model.PrologTerm arg{idx}"));
             string argList = string.Join(", ",
-                Enumerable.Range(0, arity).Select(i => $"arg{i}"));
+                Enumerable.Range(0, arity).Select(idx => $"arg{idx}"));
 
             string arrayLiteral = arity == 0 ? "[]" : $"[{argList}]";
 
-            sb.AppendLine();
-            sb.AppendLine($"    public static global::Prolog.NET.Model.PrologFact Fact({paramList})");
-            sb.AppendLine($"        => new(\"{model.PrologName}\", {arrayLiteral});");
-
             string moduleArg = model.Module is not null ? $", \"{model.Module}\"" : "";
             sb.AppendLine();
-            sb.AppendLine($"    public static global::Prolog.NET.Model.BodyGoal Query({paramList})");
-            sb.AppendLine($"        => new global::Prolog.NET.Model.Call(\"{model.PrologName}\", {arrayLiteral}{moduleArg});");
+            sb.AppendLine($"{ii}public static global::Prolog.NET.Model.PrologFact Fact({paramList})");
+            sb.AppendLine($"{iii}=> new(\"{model.PrologName}\", {arrayLiteral}{moduleArg});");
+
+            sb.AppendLine();
+            sb.AppendLine($"{ii}public static global::Prolog.NET.Model.BodyGoal Query({paramList})");
+            sb.AppendLine($"{iii}=> new global::Prolog.NET.Model.Call(\"{model.PrologName}\", {arrayLiteral}{moduleArg});");
         }
 
         sb.AppendLine();
-        sb.AppendLine($"    public static global::Prolog.NET.Model.RuleBuilder Rule()");
-        sb.AppendLine($"        => new(\"{model.PrologName}\");");
+        sb.AppendLine($"{ii}public static global::Prolog.NET.Model.RuleBuilder Rule()");
+        sb.AppendLine($"{iii}=> new(\"{model.PrologName}\");");
 
-        sb.AppendLine("}");
+        sb.AppendLine();
+        sb.AppendLine($"{ii}public static global::Prolog.NET.Model.PrologDatabaseItem Multifile()");
+        string declList = string.Join(", ", model.Arities.Select(a =>
+            $"new global::Prolog.NET.Model.PrologMultifileDeclaration(\"{model.PrologName}\", {a})"));
+        sb.AppendLine($"{iii}=> global::Prolog.NET.Model.PrologDatabaseItem.FromEntries([{declList}]);");
 
-        ctx.AddSource($"{model.TypeName}.g.cs", SourceText.From(sb.ToString(), Encoding.UTF8));
+        sb.AppendLine($"{i}}}");
+
+        if (nested)
+        {
+            sb.AppendLine("}");
+        }
+
+        string hintName = nested ? $"{model.ContainingTypeName}_{model.TypeName}.g.cs" : $"{model.TypeName}.g.cs";
+        ctx.AddSource(hintName, SourceText.From(sb.ToString(), Encoding.UTF8));
     }
 
     private static void EmitFunctor(SourceProductionContext ctx, FunctorModel model)
@@ -338,22 +382,40 @@ public sealed class SchemaGenerator : IIncrementalGenerator
             sb.AppendLine();
         }
 
-        sb.AppendLine($"public partial record {model.TypeName}");
-        sb.AppendLine("{");
+        bool nested = model.ContainingTypeName is not null;
+        string i = nested ? "    " : "";
+        string ii = i + "    ";
+        string iii = ii + "    ";
+
+        if (nested)
+        {
+            string staticMod = model.ContainingTypeIsStatic ? "static " : "";
+            sb.AppendLine($"public {staticMod}partial class {model.ContainingTypeName}");
+            sb.AppendLine("{");
+        }
+
+        sb.AppendLine($"{i}public partial record {model.TypeName}");
+        sb.AppendLine($"{i}{{");
 
         string paramList = string.Join(", ",
-            Enumerable.Range(0, model.Arity).Select(i => $"global::Prolog.NET.Model.PrologTerm arg{i}"));
+            Enumerable.Range(0, model.Arity).Select(idx => $"global::Prolog.NET.Model.PrologTerm arg{idx}"));
         string argList = string.Join(", ",
-            Enumerable.Range(0, model.Arity).Select(i => $"arg{i}"));
+            Enumerable.Range(0, model.Arity).Select(idx => $"arg{idx}"));
 
         string arrayLiteral = model.Arity == 0 ? "[]" : $"[{argList}]";
 
         sb.AppendLine();
-        sb.AppendLine($"    public static global::Prolog.NET.Model.PrologTerm Of({paramList})");
-        sb.AppendLine($"        => new global::Prolog.NET.Model.PrologCompound(\"{model.PrologName}\", {arrayLiteral});");
+        sb.AppendLine($"{ii}public static global::Prolog.NET.Model.PrologTerm Of({paramList})");
+        sb.AppendLine($"{iii}=> new global::Prolog.NET.Model.PrologCompound(\"{model.PrologName}\", {arrayLiteral});");
 
-        sb.AppendLine("}");
+        sb.AppendLine($"{i}}}");
 
-        ctx.AddSource($"{model.TypeName}.g.cs", SourceText.From(sb.ToString(), Encoding.UTF8));
+        if (nested)
+        {
+            sb.AppendLine("}");
+        }
+
+        string hintName = nested ? $"{model.ContainingTypeName}_{model.TypeName}.g.cs" : $"{model.TypeName}.g.cs";
+        ctx.AddSource(hintName, SourceText.From(sb.ToString(), Encoding.UTF8));
     }
 }

@@ -16,10 +16,7 @@ public static class PrologDSL
 
     public static class Module
     {
-        public static PrologModule Create(
-            string name,
-            IReadOnlyList<PrologDatabaseItem> items,
-            IReadOnlyList<string>? exports = null)
-            => new(name, new PrologDatabase([.. items.SelectMany(i => i.Entries)]), exports);
+        public static PrologModule Create(string name, IReadOnlyList<PrologDatabaseItem> items)
+            => new(name, new PrologDatabase([.. items.SelectMany(i => i.Entries)]));
     }
 }
