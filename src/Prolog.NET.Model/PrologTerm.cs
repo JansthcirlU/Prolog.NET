@@ -49,6 +49,13 @@ public sealed record PrologVariable : PrologTerm
     }
 }
 
+public sealed record PrologWildcard : PrologTerm
+{
+    public static readonly PrologWildcard Instance = new();
+
+    private PrologWildcard() { }
+}
+
 public sealed record PrologCompound : PrologTerm
 {
     public string Functor { get; init; }
