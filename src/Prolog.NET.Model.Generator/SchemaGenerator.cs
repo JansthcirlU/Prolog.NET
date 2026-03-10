@@ -415,7 +415,7 @@ public sealed class SchemaGenerator : IIncrementalGenerator
             sb.AppendLine("}");
         }
 
-        string hintName = nested ? $"{model.ContainingTypeName}_{model.TypeName}.g.cs" : $"{model.TypeName}.g.cs";
+        string hintName = nested ? $"{model.ContainingTypeName}_{model.TypeName}_Functor.g.cs" : $"{model.TypeName}_Functor.g.cs";
         ctx.AddSource(hintName, SourceText.From(sb.ToString(), Encoding.UTF8));
     }
 }
