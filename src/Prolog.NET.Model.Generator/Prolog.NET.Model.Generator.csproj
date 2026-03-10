@@ -7,6 +7,13 @@
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
     <!-- Analyzers must not emit output assemblies into the referencing project -->
     <IncludeBuildOutput>false</IncludeBuildOutput>
+    <PackageId>Prolog.NET.Model.Generator</PackageId>
+    <Version>0.1.0</Version>
+    <Description>Roslyn incremental source generator for Prolog.NET.Model. Emits strongly-typed Fact, Query, Rule, and Of factory methods from PrologRelation and PrologFunctor attribute declarations.</Description>
+    <PackageTags>prolog;source-generator;roslyn;analyzer;codegen;ai-assisted</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <!-- DLL lives in analyzers/, not lib/ — suppress false NU5128 warning -->
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -16,6 +23,14 @@
   <ItemGroup>
     <AdditionalFiles Include="AnalyzerReleases.Shipped.md" />
     <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Place generator DLL in the analyzers folder of the .nupkg -->
+    <None Include="$(OutputPath)\$(AssemblyName).dll"
+          Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    <!-- Include README in the package root -->
+    <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
 </Project>

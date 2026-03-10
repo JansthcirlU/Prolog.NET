@@ -5,13 +5,25 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <PackageId>Prolog.NET.Model</PackageId>
+    <Version>0.1.0</Version>
+    <Description>Schema-first DSL for constructing typed Prolog databases in C# and serializing them to .pl files. Use alongside Prolog.NET.Model.Generator.</Description>
+    <PackageTags>prolog;dsl;serialization;logic-programming;ai-assisted</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Include README in the package root -->
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Generator project reference: build-time only, not a runtime dependency -->
     <ProjectReference
       Include="..\Prolog.NET.Model.Generator\Prolog.NET.Model.Generator.csproj"
       OutputItemType="Analyzer"
-      ReferenceOutputAssembly="false" />
+      ReferenceOutputAssembly="false"
+      PrivateAssets="all" />
   </ItemGroup>
 
 </Project>
