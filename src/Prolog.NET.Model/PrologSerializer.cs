@@ -41,7 +41,7 @@ public static class PrologSerializer
         sb.AppendLine($":- module({module.Name}, [{string.Join(", ", exports)}]).");
         sb.AppendLine();
 
-        List<string> imports = [..CollectImports(module)];
+        List<string> imports = [.. CollectImports(module)];
         if (imports.Count > 0)
         {
             foreach (string import in imports)
