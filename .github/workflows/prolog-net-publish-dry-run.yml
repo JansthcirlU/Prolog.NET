@@ -1,11 +1,10 @@
-name: prolog-net-publish-model-generator
+name: prolog-net-publish-dry-run
 
 on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  id-token: write
+  contents: read
 
 jobs:
   publish:
@@ -23,9 +22,9 @@ jobs:
       - name: Check for changes since last publish
         id: changes
         run: |
-          CSPROJ="src/Prolog.NET.Model.Generator/Prolog.NET.Model.Generator.csproj"
-          README="src/Prolog.NET.Model.Generator/README.md"
-          LAST_TAG=$(git tag --list 'generator/v*' --sort=-version:refname | head -1)
+          CSPROJ="src/Prolog.NET.Model/Prolog.NET.Model.csproj"
+          README="src/Prolog.NET.Model/README.md"
+          LAST_TAG=$(git tag --list 'model/v*' --sort=-version:refname | head -1)
           if [ -z "$LAST_TAG" ]; then
             echo "No previous publish tag — treating as first publish."
             echo "changed=true" >> "$GITHUB_OUTPUT"
@@ -45,30 +44,22 @@ jobs:
         if: steps.changes.outputs.changed == 'false'
         run: echo "::notice::No changes to .csproj or README.md since last publish tag. Skipping."
 
+      - name: Test
+        if: steps.changes.outputs.changed == 'true'
+        run: dotnet test tests/Prolog.NET.Model.Tests/Prolog.NET.Model.Tests.csproj -c Release
+
       - name: Pack
         if: steps.changes.outputs.changed == 'true'
-        run: dotnet pack src/Prolog.NET.Model.Generator/Prolog.NET.Model.Generator.csproj -c Release -o ./nupkgs
+        run: dotnet pack src/Prolog.NET.Model/Prolog.NET.Model.csproj -c Release -o ./nupkgs
 
-      - name: NuGet login (OIDC → temp API key)
-        if: steps.changes.outputs.changed == 'true'
-        uses: NuGet/login@v1
-        id: login
-        with:
-          user: ${{ secrets.NUGET_USER }}
-
-      - name: Push to NuGet.org
+      - name: '[DRY RUN] Push to NuGet.org'
         if: steps.changes.outputs.changed == 'true'
         run: |
-          dotnet nuget push ./nupkgs/Prolog.NET.Model.Generator.*.nupkg \
-            --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" \
-            --source https://api.nuget.org/v3/index.json \
-            --skip-duplicate
+          echo "Would push:"
+          ls ./nupkgs/Prolog.NET.Model.*.nupkg
 
-      - name: Tag published version
+      - name: '[DRY RUN] Tag published version'
         if: steps.changes.outputs.changed == 'true'
         run: |
-          VERSION=$(grep -oP '(?<=<Version>)[^<]+' src/Prolog.NET.Model.Generator/Prolog.NET.Model.Generator.csproj | tr -d '[:space:]')
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag "generator/v$VERSION"
-          git push origin "generator/v$VERSION"
+          VERSION=$(grep -oP '(?<=<Version>)[^<]+' src/Prolog.NET.Model/Prolog.NET.Model.csproj | tr -d '[:space:]')
+          echo "Would create and push tag: model/v$VERSION"

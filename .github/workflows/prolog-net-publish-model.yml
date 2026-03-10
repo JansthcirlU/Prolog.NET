@@ -10,6 +10,8 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/dotnet/sdk:10
     if: github.ref == 'refs/heads/main'
 
     steps:
@@ -42,12 +44,6 @@ jobs:
       - name: Skip — no relevant changes
         if: steps.changes.outputs.changed == 'false'
         run: echo "::notice::No changes to .csproj or README.md since last publish tag. Skipping."
-
-      - name: Setup .NET
-        if: steps.changes.outputs.changed == 'true'
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '10.x'
 
       - name: Test
         if: steps.changes.outputs.changed == 'true'
