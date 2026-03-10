@@ -1,0 +1,74 @@
+name: prolog-net-publish-model
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for changes since last publish
+        id: changes
+        run: |
+          CSPROJ="src/Prolog.NET.Model/Prolog.NET.Model.csproj"
+          README="src/Prolog.NET.Model/README.md"
+          LAST_TAG=$(git tag --list 'model/v*' --sort=-version:refname | head -1)
+          if [ -z "$LAST_TAG" ]; then
+            echo "No previous publish tag — treating as first publish."
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            DIFF=$(git diff --name-only "$LAST_TAG" HEAD -- "$CSPROJ" "$README")
+            if [ -z "$DIFF" ]; then
+              echo "No changes since $LAST_TAG."
+              echo "changed=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "Changed files since $LAST_TAG:"
+              echo "$DIFF"
+              echo "changed=true" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+      - name: Skip — no relevant changes
+        if: steps.changes.outputs.changed == 'false'
+        run: echo "::notice::No changes to .csproj or README.md since last publish tag. Skipping."
+
+      - name: Setup .NET
+        if: steps.changes.outputs.changed == 'true'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Test
+        if: steps.changes.outputs.changed == 'true'
+        run: dotnet test tests/Prolog.NET.Model.Tests/Prolog.NET.Model.Tests.csproj -c Release
+
+      - name: Pack
+        if: steps.changes.outputs.changed == 'true'
+        run: dotnet pack src/Prolog.NET.Model/Prolog.NET.Model.csproj -c Release -o ./nupkgs
+
+      - name: Push to NuGet.org
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          dotnet nuget push ./nupkgs/Prolog.NET.Model.*.nupkg \
+            --api-key "${{ secrets.NUGET_API_KEY }}" \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate
+
+      - name: Tag published version
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          VERSION=$(grep -oP '(?<=<Version>)[^<]+' src/Prolog.NET.Model/Prolog.NET.Model.csproj | tr -d '[:space:]')
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "model/v$VERSION"
+          git push origin "model/v$VERSION"
