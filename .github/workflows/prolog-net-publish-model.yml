@@ -5,6 +5,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   publish:
@@ -56,11 +57,18 @@ jobs:
         if: steps.changes.outputs.changed == 'true'
         run: dotnet pack src/Prolog.NET.Model/Prolog.NET.Model.csproj -c Release -o ./nupkgs
 
+      - name: NuGet login (OIDC → temp API key)
+        if: steps.changes.outputs.changed == 'true'
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
       - name: Push to NuGet.org
         if: steps.changes.outputs.changed == 'true'
         run: |
           dotnet nuget push ./nupkgs/Prolog.NET.Model.*.nupkg \
-            --api-key "${{ secrets.NUGET_API_KEY }}" \
+            --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" \
             --source https://api.nuget.org/v3/index.json \
             --skip-duplicate
 
