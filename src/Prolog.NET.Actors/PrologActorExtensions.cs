@@ -24,7 +24,8 @@ public static class PrologActorExtensions
                 .WithServiceProvider(sp)
                 .WithRemote(BindToLocalhost(port)
                     .WithProtoMessages(MessagesReflection.Descriptor)))
-            .AddTransient<PrologActor>();
+            .AddTransient<PrologActor>()
+        .AddTransient<PrologWorkerActor>();
 
     /// <summary>
     /// Registers the console-side <see cref="ActorSystem"/> with Proto.Remote (listening on
