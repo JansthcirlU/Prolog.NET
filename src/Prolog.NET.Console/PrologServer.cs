@@ -11,7 +11,7 @@ namespace Prolog.NET.Console;
 /// then drives a keystroke-based console UI. All state and allowed actions come from
 /// <see cref="CliResponse"/> — this class never hardcodes what the user can do per state.
 /// </summary>
-public sealed class PrologWorker(
+public sealed class PrologServer(
     ActorSystem actorSystem,
     IServiceProvider serviceProvider,
     IHostApplicationLifetime lifetime) : BackgroundService
