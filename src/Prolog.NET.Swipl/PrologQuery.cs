@@ -14,8 +14,11 @@ namespace Prolog.NET.Swipl;
 /// </remarks>
 public sealed class PrologQuery : IDisposable
 {
-    // The engine that owns the Prolog thread; used to marshal all PL_* calls.
+    // The engine that owns the thread pool; used for IsDisposed checks and ReturnThread.
     private readonly PrologEngine _engine;
+
+    // The worker thread leased for this query's entire lifetime.
+    private readonly PrologEngine.PrologWorkerThread _thread;
 
     // Foreign frame anchors all term_t refs allocated for this query.
     private nuint _frame;
@@ -58,12 +61,14 @@ public sealed class PrologQuery : IDisposable
         }
     }
 
-    internal PrologQuery(string goal, PrologEngine engine)
+    internal PrologQuery(string goal, PrologEngine engine, PrologEngine.PrologWorkerThread thread)
     {
         _engine = engine;
+        _thread = thread;
 
         // 1. Open a foreign frame so all term_t refs allocated below remain valid
         //    for the lifetime of this query object.
+        //    This runs on the leased thread (called from within thread.Run()).
         _frame = SwiPrologNative.PL_open_foreign_frame();
 
         try
@@ -191,7 +196,7 @@ public sealed class PrologQuery : IDisposable
         }
 
         bool result = false;
-        _engine.RunOnPrologThread(() => { result = NextCore(); });
+        _thread.Run(() => { result = NextCore(); });
         return result;
     }
 
@@ -318,22 +323,32 @@ public sealed class PrologQuery : IDisposable
             return;
         }
 
-        _engine.RunOnPrologThread(() =>
+        try
         {
-            unsafe
+            _thread.Run(() =>
             {
-                if (!_queryClosed && _queryRefPtr != 0)
+                unsafe
                 {
-                    __PL_queryRef* queryRef = (Generated.__PL_queryRef*)_queryRefPtr;
-                    _ = SwiPrologNative.PL_close_query(queryRef);
-                }
+                    if (!_queryClosed && _queryRefPtr != 0)
+                    {
+                        __PL_queryRef* queryRef = (Generated.__PL_queryRef*)_queryRefPtr;
+                        _ = SwiPrologNative.PL_close_query(queryRef);
+                    }
 
-                if (_frame != 0)
-                {
-                    SwiPrologNative.PL_close_foreign_frame(_frame);
-                    _frame = 0;
+                    if (_frame != 0)
+                    {
+                        SwiPrologNative.PL_close_foreign_frame(_frame);
+                        _frame = 0;
+                    }
                 }
-            }
-        });
+            });
+        }
+        catch (InvalidOperationException)
+        {
+            // Engine was disposed concurrently; PL_cleanup handles resource cleanup.
+            return;
+        }
+
+        _engine.ReturnThread(_thread);
     }
 }
