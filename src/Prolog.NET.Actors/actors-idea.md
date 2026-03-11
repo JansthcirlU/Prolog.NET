@@ -38,9 +38,9 @@ In a multi-reader setting, actors should be orchestrated to allow for distinct r
 
 ### Questions to be answered before proceeding
 
-1. given the current implementation of `PrologEngine` (inside `Prolog.NET.Swipl`), can multiple threads query the same loaded knowledge base?
-2. given the current implementation of `PrologEngine`, can multiple processes load the same file?
-3. given the current implementation of `WorkerHost`, is it possible to refactor it to spawn multiple actors dynamically?
+- [x] given the current implementation of `PrologEngine` (inside `Prolog.NET.Swipl`), can multiple threads query the same loaded knowledge base?
+- [x] given the current implementation of `PrologEngine`, can multiple processes load the same file?
+- [x] given the current implementation of `WorkerHost`, is it possible to refactor it to spawn multiple actors dynamically?
 
 ## Feedback
 
