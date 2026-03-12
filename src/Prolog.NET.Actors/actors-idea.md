@@ -249,4 +249,17 @@ flowchart TD
 
 ## Feedback
 
+### Rework completed (2026-03-12)
+
+The hybrid architecture described in "An alternative approach that would work?" has been fully implemented:
+
+- `Prolog.NET.Server` (Layer 1) — ASP.NET Core with REST/SSE and gRPC, `WorkerRegistry` for dynamic worker spawning and capacity routing. Lives at `src/Prolog.NET.Server/`.
+- `PrologWorkerActor` (Layer 2) — redesigned to spawn short-lived `PrologQueryActor` children per query, capacity-limited by `PROLOG_ENGINE_THREADS`. No idle pool.
+- `PrologQueryActor` (Layer 3) — new short-lived actor holding one `PrologQuery`. Stops itself when query is exhausted, errors, or receives `CloseQueryMessage`.
+- Old CLI-based layer (`CliActor`, `CliMessages`, `PrologActor`) removed.
+
+Scale-out works as designed: when a worker is at capacity it returns `Failed { "No capacity" }` and the server spawns a new worker process for the same file.
+
+Outstanding: e2e test project for the server layer, and committing all changes.
+
 Add your own thoughts and concerns here.
