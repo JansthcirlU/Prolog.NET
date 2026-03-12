@@ -44,22 +44,22 @@ public sealed class PrologGrpcService(WorkerRegistry registry) : PrologService.P
                 switch (next.ResultCase)
                 {
                     case NextSolutionResponse.ResultOneofCase.Solution:
-                    {
-                        SolutionVars sv = new();
-                        sv.Variables.Add(next.Solution.Variables);
-                        await responseStream.WriteAsync(new SolutionResponse { Solution = sv });
-                        break;
-                    }
+                        {
+                            SolutionVars sv = new();
+                            sv.Variables.Add(next.Solution.Variables);
+                            await responseStream.WriteAsync(new SolutionResponse { Solution = sv });
+                            break;
+                        }
 
                     case NextSolutionResponse.ResultOneofCase.FinalSolution:
-                    {
-                        SolutionVars sv = new();
-                        sv.Variables.Add(next.FinalSolution.Variables);
-                        await responseStream.WriteAsync(new SolutionResponse { Solution = sv });
-                        await responseStream.WriteAsync(new SolutionResponse { NoMore = new NoMoreSolutions() });
-                        queryId = null;
-                        return;
-                    }
+                        {
+                            SolutionVars sv = new();
+                            sv.Variables.Add(next.FinalSolution.Variables);
+                            await responseStream.WriteAsync(new SolutionResponse { Solution = sv });
+                            await responseStream.WriteAsync(new SolutionResponse { NoMore = new NoMoreSolutions() });
+                            queryId = null;
+                            return;
+                        }
 
                     case NextSolutionResponse.ResultOneofCase.NoMore:
                         await responseStream.WriteAsync(new SolutionResponse { NoMore = new NoMoreSolutions() });
