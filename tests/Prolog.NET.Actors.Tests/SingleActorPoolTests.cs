@@ -98,7 +98,7 @@ public sealed class SingleActorPoolTests(PrologActorsFixture fixture)
         fixture.ActorSystem.Root.Send(fixture.SingleWorkerPid, new CloseQueryMessage { QueryId = queryId });
         await Task.Delay(300);
 
-        // Open a new query — actor should be back in idle pool
+        // Open a new query — new PrologQueryActor should be spawned successfully
         using CancellationTokenSource open2Cts = new(TimeSpan.FromSeconds(15));
         OpenQueryResponse open2Resp = await SendAsync<OpenQueryResponse>(
             new OpenQueryMessage { Goal = "ancestor(tom, X)" }, open2Cts.Token);
@@ -130,7 +130,7 @@ public sealed class SingleActorPoolTests(PrologActorsFixture fixture)
                 new OpenQueryMessage { Goal = "ancestor(tom, X)" }, open2Cts.Token);
 
             Assert.Equal(OpenQueryResponse.ResultOneofCase.Failed, open2Resp.ResultCase);
-            Assert.Contains("No idle actor available", open2Resp.Failed.Error);
+            Assert.Contains("No capacity", open2Resp.Failed.Error);
         }
         finally
         {
