@@ -29,7 +29,13 @@ internal sealed class WorkerRegistry
     private async Task<PrologWorker> LoadFileWorkerAsync(string fileName, CancellationToken cancellationToken)
     {
         ConcurrentBag<PrologWorker> workers = _fileWorkers.GetOrAdd(fileName, []);
-        SwiPrologWrapper wrapper = SwiPrologWrapper.Create();
+
+        if (workers.TryPeek(out PrologWorker? existing))
+        {
+            return existing;
+        }
+
+        SwiPrologWrapper wrapper = SwiPrologWrapper.Create(fileName);
         PrologWorker worker = await PrologWorker.StartNewAsync(wrapper, cancellationToken);
         workers.Add(worker);
         return worker;
