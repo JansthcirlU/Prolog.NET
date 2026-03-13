@@ -20,4 +20,8 @@ internal class PrologWorkerException : Exception
     {
         
     }
+    internal PrologWorkerException(string? message, Exception innerException) : base(message, innerException)
+    {
+        
+    }
 }

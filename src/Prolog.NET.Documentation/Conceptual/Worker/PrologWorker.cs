@@ -14,8 +14,8 @@ internal sealed class PrologWorker
 
     internal static Task<PrologWorker> StartNewAsync(SwiPrologWrapper swipl, CancellationToken cancellationToken)
         => cancellationToken.IsCancellationRequested
-            ? Task.FromResult<PrologWorker>(new(swipl))
-            : Task.FromCanceled<PrologWorker>(cancellationToken);
+            ? Task.FromCanceled<PrologWorker>(cancellationToken)
+            : Task.FromResult<PrologWorker>(new(swipl));
 
     internal async IAsyncEnumerable<PrologWorkerResponse> QueryFileAsync(string goal, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
@@ -43,7 +43,7 @@ internal sealed class PrologWorker
 
             if (exception is not null && next is null)
             {
-                yield return PrologWorkerResponse.FromException(exception);
+                yield return PrologWorkerResponse.FromException(new(null, exception));
                 yield break;
             }
             
