@@ -247,6 +247,10 @@ flowchart TD
 
 ```
 
+### Specification of the API
+
+
+
 ## Feedback
 
 ### Rework completed (2026-03-12)

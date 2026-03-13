@@ -1,0 +1,46 @@
+using System.Collections.Concurrent;
+
+namespace Prolog.NET.Documentation.Conceptual.Swipl;
+
+internal sealed class SwiPrologWrapper
+{
+    private readonly ConcurrentDictionary<Guid, PrologEngine> _engines;
+
+    private SwiPrologWrapper()
+    {
+        _engines = [];
+    }
+
+    internal static SwiPrologWrapper Create()
+        => new();
+
+    internal Task<PrologEngine?> QueryAsync(string goal, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return Task.FromResult<PrologEngine?>(null);
+            }
+
+            Guid id = Guid.NewGuid();
+            PrologEngine engine = new(id, goal);
+            if (!_engines.TryAdd(id, engine))
+            {
+                return Task.FromException<PrologEngine?>(new InvalidOperationException($"Tried to create PrologEngine with duplicate ID: {id}"));
+            }
+            return Task.FromResult<PrologEngine?>(engine);
+        }
+        catch (OperationCanceledException)
+        {
+            return Task.FromResult<PrologEngine?>(null);
+        }
+        catch (Exception ex)
+        {
+            return Task.FromException<PrologEngine?>(ex);
+        }
+    }
+
+    internal Task<bool> DestroyEngine(PrologEngine engine)
+        => Task.FromResult(_engines.TryRemove(new(engine.Id, engine)));
+}

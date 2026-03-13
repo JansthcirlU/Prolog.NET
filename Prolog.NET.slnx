@@ -3,7 +3,9 @@
     <Project Path="src/Prolog.NET.Actors/Prolog.NET.Actors.csproj" />
     <Project Path="src/Prolog.NET.Server/Prolog.NET.Server.csproj" />
     <Project Path="src/Prolog.NET.Model/Prolog.NET.Model.csproj" />
+    <Project Path="src/Prolog.NET.Console/Prolog.NET.Console.csproj" />
     <Project Path="src/Prolog.NET.Designer/Prolog.NET.Designer.csproj" />
+    <Project Path="src/Prolog.NET.Documentation/Prolog.NET.Documentation.csproj" />
     <Project Path="src/Prolog.NET.Model.Generator/Prolog.NET.Model.Generator.csproj" />
     <Project Path="src/Prolog.NET.Swipl/Prolog.NET.Swipl.csproj" />
     <Project Path="src/Prolog.NET.Worker/Prolog.NET.Worker.csproj" />
