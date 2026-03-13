@@ -55,24 +55,22 @@ internal sealed class RestSolutionQuerier : IAsyncDisposable
         {
             try
             {
-                bool canGetCurrent = Interlocked.Read(ref _disposing) == 0 && await _inner.MoveNextAsync();
-                if (canGetCurrent)
-                {
-                    return QuerierResponse.Exhausted();
-                }
-
                 lock (_lock)
                 {
-                    if (_token.Value == token.Value)
+                    if (_token.Value != token.Value)
                     {
-                        _token = NextSolutionToken.New();
-                        return Interlocked.Read(ref _disposing) == 0
-                            ? QuerierResponse.Next(_inner.Current, _token)
-                            : QuerierResponse.QuerierDisposed();
+                        return QuerierResponse.InvalidToken(token);
                     }
-
-                    return QuerierResponse.InvalidToken(token);
+                    _token = NextSolutionToken.New();
                 }
+                bool canGetCurrent = Interlocked.Read(ref _disposing) == 0 && await _inner.MoveNextAsync();
+                if (!canGetCurrent)
+                {
+                    return Interlocked.Read(ref _disposing) == 0
+                        ? QuerierResponse.Exhausted()
+                        : QuerierResponse.QuerierDisposed();
+                }
+                return QuerierResponse.Next(_inner.Current, _token);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
