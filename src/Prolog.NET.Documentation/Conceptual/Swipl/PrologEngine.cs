@@ -2,6 +2,7 @@ namespace Prolog.NET.Documentation.Conceptual.Swipl;
 
 internal sealed class PrologEngine
 {
+    private readonly string _fileName;
     private readonly string _goal;
     private bool _hasStarted;
     private bool _isFaulted;
@@ -9,9 +10,10 @@ internal sealed class PrologEngine
 
     internal Guid Id { get; }
 
-    internal PrologEngine(Guid id, string goal)
+    internal PrologEngine(Guid id, string fileName, string goal)
     {
         Id = id;
+        _fileName = fileName;
         _goal = goal;
         _hasStarted = false;
         _isFaulted = false;
@@ -21,7 +23,7 @@ internal sealed class PrologEngine
     internal Task InitialiseAsync()
     {
         _hasStarted = true;
-        if (string.IsNullOrWhiteSpace(_goal))
+        if (string.IsNullOrWhiteSpace(_fileName) || string.IsNullOrWhiteSpace(_goal))
         {
             _isFaulted = true;
         }
@@ -45,7 +47,7 @@ internal sealed class PrologEngine
     private IEnumerable<PrologEngineResponse> MockResponses(bool withError = false)
     {
         // Check if engine has started
-        if (_hasStarted)
+        if (!_hasStarted)
         {
             yield return PrologEngineResponse.FromException(PrologEngineException.EngineNotInitialized("Engine not initialised."));
             yield break;

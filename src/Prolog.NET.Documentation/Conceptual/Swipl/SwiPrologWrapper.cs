@@ -5,14 +5,16 @@ namespace Prolog.NET.Documentation.Conceptual.Swipl;
 internal sealed class SwiPrologWrapper
 {
     private readonly ConcurrentDictionary<Guid, PrologEngine> _engines;
+    private readonly string _fileName;
 
-    private SwiPrologWrapper()
+    private SwiPrologWrapper(string fileName)
     {
         _engines = [];
+        _fileName = fileName;
     }
 
-    internal static SwiPrologWrapper Create()
-        => new();
+    internal static SwiPrologWrapper Create(string fileName)
+        => new(fileName);
 
     internal Task<PrologEngine?> QueryAsync(string goal, CancellationToken cancellationToken)
     {
@@ -24,7 +26,7 @@ internal sealed class SwiPrologWrapper
             }
 
             Guid id = Guid.NewGuid();
-            PrologEngine engine = new(id, goal);
+            PrologEngine engine = new(id, _fileName, goal);
             if (!_engines.TryAdd(id, engine))
             {
                 return Task.FromException<PrologEngine?>(new InvalidOperationException($"Tried to create PrologEngine with duplicate ID: {id}"));
