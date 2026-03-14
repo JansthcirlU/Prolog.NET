@@ -70,7 +70,7 @@ internal sealed class PrologEngine
         // Interrupt solution stream with error
         if (withError)
         {
-            yield return PrologEngineResponse.FromException(PrologEngineException.Miscellaneous("Something went wrong."));
+            yield return PrologEngineResponse.FromException(PrologEngineException.Miscellaneous("Something went wrong.", requestDisposal: true));
             yield break;
         }
 

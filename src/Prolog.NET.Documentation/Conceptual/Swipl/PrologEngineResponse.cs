@@ -43,8 +43,11 @@ internal abstract class PrologEngineException : Exception
 
     internal sealed class MiscellaneousException : PrologEngineException
     {
-        internal MiscellaneousException(string? message) : base(message)
+        public bool RequestDisposal { get; }
+
+        internal MiscellaneousException(string? message, bool requestDisposal) : base(message)
         {
+            RequestDisposal = requestDisposal;
         }
     }
 
@@ -55,6 +58,6 @@ internal abstract class PrologEngineException : Exception
     internal static InvalidQueryException InvalidQuery(string? message)
         => new(message);
 
-    internal static MiscellaneousException Miscellaneous(string? message)
-        => new(message);
+    internal static MiscellaneousException Miscellaneous(string? message, bool requestDisposal)
+        => new(message, requestDisposal);
 }

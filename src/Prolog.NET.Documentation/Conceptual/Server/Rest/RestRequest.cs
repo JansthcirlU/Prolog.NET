@@ -1,10 +1,10 @@
 namespace Prolog.NET.Documentation.Conceptual.Server.Rest;
 
-internal abstract record RestRequest
+internal abstract record RestRequest(Guid RequestId)
 {
-    internal sealed record StartQueryRequest(Guid RequestId, string FileName, string Goal) : RestRequest;
-    internal sealed record NextSolutionRequest(Guid RequestId, NextSolutionToken NextSolutionToken) : RestRequest;
-    internal sealed record StopQueryRequest(Guid RequestId) : RestRequest;
+    internal sealed record StartQueryRequest(Guid RequestId, string FileName, string Goal) : RestRequest(RequestId);
+    internal sealed record NextSolutionRequest(Guid RequestId, NextSolutionToken NextSolutionToken) : RestRequest(RequestId);
+    internal sealed record StopQueryRequest(Guid RequestId) : RestRequest(RequestId);
 
     internal static StartQueryRequest StartQuery(string fileName, string goal)
         => new(Guid.NewGuid(), fileName, goal);

@@ -1,11 +1,11 @@
 namespace Prolog.NET.Documentation.Conceptual.Server.Rest;
 
-internal abstract record RestResponse
+internal abstract record RestResponse(bool ShouldDispose)
 {
-    internal sealed record OkResponse<T>(T Body) : RestResponse where T : RestPrologBody;
-    internal sealed record BadRequestResponse<T>(T Body) : RestResponse where T : RestPrologBody;
-    internal sealed record ProblemResponse<T>(T Body) : RestResponse where T : RestPrologBody;
-    internal sealed record NotImplementedResponse<T>(T Body) : RestResponse where T : RestPrologBody;
+    internal sealed record OkResponse<T>(T Body) : RestResponse(Body.WillDispose) where T : RestPrologBody;
+    internal sealed record BadRequestResponse<T>(T Body) : RestResponse(Body.WillDispose) where T : RestPrologBody;
+    internal sealed record ProblemResponse<T>(T Body) : RestResponse(Body.WillDispose) where T : RestPrologBody;
+    internal sealed record NotImplementedResponse<T>(T Body) : RestResponse(Body.WillDispose) where T : RestPrologBody;
 
     internal static OkResponse<T> Ok<T>(T body) where T : RestPrologBody
         => new(body);
