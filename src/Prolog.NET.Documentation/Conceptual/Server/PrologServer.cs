@@ -50,7 +50,7 @@ internal sealed class PrologServer
                 return existing;
             }
 
-            SwiPrologWrapper actor = SwiPrologWrapper.Create(fileName);
+            PrologActor actor = PrologActor.Create(fileName);
             PrologWorker worker = await PrologWorker.StartNewAsync(actor, cancellationToken);
             workers.Add(worker);
             return worker;

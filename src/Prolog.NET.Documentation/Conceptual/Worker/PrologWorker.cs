@@ -5,14 +5,14 @@ namespace Prolog.NET.Documentation.Conceptual.Worker;
 
 internal sealed class PrologWorker
 {
-    private readonly SwiPrologWrapper _swipl;
+    private readonly PrologActor _swipl;
 
-    private PrologWorker(SwiPrologWrapper swipl)
+    private PrologWorker(PrologActor swipl)
     {
         _swipl = swipl;
     }
 
-    internal static Task<PrologWorker> StartNewAsync(SwiPrologWrapper swipl, CancellationToken cancellationToken)
+    internal static Task<PrologWorker> StartNewAsync(PrologActor swipl, CancellationToken cancellationToken)
         => cancellationToken.IsCancellationRequested
             ? Task.FromCanceled<PrologWorker>(cancellationToken)
             : Task.FromResult<PrologWorker>(new(swipl));

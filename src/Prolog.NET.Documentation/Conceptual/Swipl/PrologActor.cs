@@ -2,18 +2,18 @@ using System.Collections.Concurrent;
 
 namespace Prolog.NET.Documentation.Conceptual.Swipl;
 
-internal sealed class SwiPrologWrapper
+internal sealed class PrologActor
 {
     private readonly ConcurrentDictionary<Guid, PrologEngine> _engines;
     private readonly string _fileName;
 
-    private SwiPrologWrapper(string fileName)
+    private PrologActor(string fileName)
     {
         _engines = [];
         _fileName = fileName;
     }
 
-    internal static SwiPrologWrapper Create(string fileName)
+    internal static PrologActor Create(string fileName)
         => new(fileName);
 
     internal Task<PrologEngine?> QueryAsync(string goal, CancellationToken cancellationToken)
