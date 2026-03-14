@@ -3,7 +3,7 @@ namespace Prolog.NET.Documentation.Conceptual.Server.Rest;
 internal abstract record RestPrologBody(bool ShouldDispose)
 {
     internal sealed record RequestStarted(Guid RequestId, NextSolutionToken NextSolutionToken) : RestPrologBody(false);
-    internal sealed record RequestSolution(Guid RequestId, string Solution, NextSolutionToken? NextSolutionToken) : RestPrologBody(false);
+    internal sealed record RequestSolution(Guid RequestId, string Solution, NextSolutionToken? NextSolutionToken) : RestPrologBody(NextSolutionToken is null);
     internal sealed record RequestStopped(Guid RequestId, RequestStoppedReason Reason) : RestPrologBody(true);
     internal sealed record BadRequest(string Message, bool ShouldDispose) : RestPrologBody(ShouldDispose);
     internal abstract record PrologServerProblemDetails(string Type, string Title, int Status, string Detail, string Instance, bool ShouldDispose) : RestPrologBody(ShouldDispose)
