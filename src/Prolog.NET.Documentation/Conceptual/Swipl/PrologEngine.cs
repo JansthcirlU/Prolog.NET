@@ -44,6 +44,7 @@ internal sealed class PrologEngine
         return Task.FromResult(next);
     }
 
+    // TODO: rework to be more sophisticated or make responses injectable
     private IEnumerable<PrologEngineResponse> MockResponses(bool withError = false)
     {
         // Check if engine has started
