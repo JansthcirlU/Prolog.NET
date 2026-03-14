@@ -58,7 +58,11 @@ internal sealed class PrologWorker
                 if (next is PrologEngineResponse.ExceptionResponse)
                 {
                     break;
-                }   
+                }
+                if (next is PrologEngineResponse.QueryHaltedResponse)
+                {
+                    break;
+                }
             }
         } while (true);
 
