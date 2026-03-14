@@ -72,7 +72,7 @@ internal sealed class RestSolutionQuerier : IAsyncDisposable
                 }
                 return QuerierResponse.Next(_inner.Current, _token);
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested || _cancelEnumerator.IsCancellationRequested)
             {
                 return QuerierResponse.QuerierInterrupted();
             }
