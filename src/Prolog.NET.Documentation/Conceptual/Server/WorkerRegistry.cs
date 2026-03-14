@@ -8,6 +8,7 @@ namespace Prolog.NET.Documentation.Conceptual.Server;
 internal sealed class WorkerRegistry
 {
     private readonly ConcurrentDictionary<string, ConcurrentBag<PrologWorker>> _fileWorkers;
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _creationLocks;
     private static readonly Lazy<WorkerRegistry> _instance = new(() => new());
 
     internal static WorkerRegistry Instance => _instance.Value;
@@ -15,6 +16,7 @@ internal sealed class WorkerRegistry
     private WorkerRegistry()
     {
         _fileWorkers = [];
+        _creationLocks = [];
     }
 
     internal async IAsyncEnumerable<PrologWorkerResponse> QueryFileAsync(string fileName, string goal, [EnumeratorCancellation] CancellationToken cancellationToken)
@@ -35,9 +37,24 @@ internal sealed class WorkerRegistry
             return existing;
         }
 
-        SwiPrologWrapper wrapper = SwiPrologWrapper.Create(fileName);
-        PrologWorker worker = await PrologWorker.StartNewAsync(wrapper, cancellationToken);
-        workers.Add(worker);
-        return worker;
+        SemaphoreSlim creationLock = _creationLocks.GetOrAdd(fileName, _ => new SemaphoreSlim(1, 1));
+        await creationLock.WaitAsync(cancellationToken);
+        try
+        {
+            // Re-check after acquiring the lock — another thread may have created the worker while we were waiting
+            if (workers.TryPeek(out existing))
+            {
+                return existing;
+            }
+
+            SwiPrologWrapper wrapper = SwiPrologWrapper.Create(fileName);
+            PrologWorker worker = await PrologWorker.StartNewAsync(wrapper, cancellationToken);
+            workers.Add(worker);
+            return worker;
+        }
+        finally
+        {
+            creationLock.Release();
+        }
     }
 }
