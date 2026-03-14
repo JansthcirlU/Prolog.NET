@@ -41,9 +41,12 @@ internal sealed class RestPrologServer
 
         // Add to concurrent dictionary
         bool requestStarted = _queryResponses.TryAdd(requestId, querier);
-        return requestStarted
-            ? RestResponse.Ok<RestPrologBody.RequestStarted>(new(requestId, token))
-            : RestResponse.BadRequest<RestPrologBody.BadRequest>(new("A request with the given ID is already being processed. If you made the other request with this ID, but lost the corresponding next-solution token, please send a new request.", true));
+        if (!requestStarted)
+        {
+            await querier.DisposeAsync();
+            return RestResponse.BadRequest<RestPrologBody.BadRequest>(new("A request with the given ID is already being processed. If you made the other request with this ID, but lost the corresponding next-solution token, please send a new request.", false));
+        }
+        return RestResponse.Ok<RestPrologBody.RequestStarted>(new(requestId, token));
     }
 
     private async Task<RestResponse> HandleNextSolutionRequestAsync(RestRequest.NextSolutionRequest nextSolution, CancellationToken cancellationToken)
