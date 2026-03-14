@@ -26,47 +26,51 @@ internal sealed class PrologWorker
         }
         await engine.InitialiseAsync();
 
-        do
+        try
         {
-            PrologEngineResponse? next;
-            Exception? exception;
-            try
+            do
             {
-                next = await engine.GetNextResponseAsync(cancellationToken);
-                exception = null;
-            }
-            catch (Exception ex)
-            {
-                exception = ex;
-                next = null;
-            }
-
-            if (exception is not null && next is null)
-            {
-                yield return PrologWorkerResponse.FromException(new(null, exception));
-                yield break;
-            }
-            
-            if (next is not null)
-            {
-                yield return PrologWorkerResponse.FromEngine(next);
-
-                if (next is PrologEngineResponse.FinalSolutionResponse)
+                PrologEngineResponse? next;
+                Exception? exception;
+                try
                 {
-                    break;
+                    next = await engine.GetNextResponseAsync(cancellationToken);
+                    exception = null;
                 }
-                if (next is PrologEngineResponse.ExceptionResponse)
+                catch (Exception ex)
                 {
-                    break;
+                    exception = ex;
+                    next = null;
                 }
-                if (next is PrologEngineResponse.QueryHaltedResponse)
-                {
-                    break;
-                }
-            }
-        } while (true);
 
-        await _swipl.DestroyEngine(engine);
-        yield break;
+                if (exception is not null && next is null)
+                {
+                    yield return PrologWorkerResponse.FromException(new(null, exception));
+                    yield break;
+                }
+
+                if (next is not null)
+                {
+                    yield return PrologWorkerResponse.FromEngine(next);
+
+                    if (next is PrologEngineResponse.FinalSolutionResponse)
+                    {
+                        break;
+                    }
+                    if (next is PrologEngineResponse.ExceptionResponse)
+                    {
+                        break;
+                    }
+                    if (next is PrologEngineResponse.QueryHaltedResponse)
+                    {
+                        break;
+                    }
+                }
+            } while (true);
+        }
+        finally
+        {
+            await _swipl.DestroyEngine(engine);
+        }
     }
 }
