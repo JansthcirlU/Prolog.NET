@@ -1,9 +1,11 @@
 using Mermaid.Flowcharts;
 using Mermaid.Flowcharts.Links;
 using Mermaid.Flowcharts.Nodes;
+using Mermaid.Flowcharts.Nodes.NodeText;
 using Mermaid.Flowcharts.Styling;
 using Mermaid.Flowcharts.Styling.Attributes;
 using Mermaid.Flowcharts.Subgraphs;
+using Prolog.NET.Documentation.Supervision;
 
 namespace Prolog.NET.Documentation;
 
@@ -13,6 +15,7 @@ internal static class PrologNetFlowcharts
     {
         yield return GetArchitectureFlowchart();
         yield return GetSupervisionHierarchyFlowchart();
+        yield return GetStructuredSupervisionHierarchyFlowchart();
     }
 
     private static Flowchart GetArchitectureFlowchart()
@@ -135,6 +138,7 @@ internal static class PrologNetFlowcharts
             .AddLink(routerToWorkersFamilyLink);
         
         Node workerFamily1 = Node.Create("worker_family1", "Worker 1");
+        Subgraph workerFamily1Process1 = Subgraph.Create("worker_family1_process1", "Process 1");
         Subgraph workerFamily1Actors = Subgraph.Create("worker_family1_actors", "Worker 1 actors", SubgraphDirection.TB);
         Node workerFamily1Actor1 = Node.Create("worker_family1_actor1", "Actor 1");
         Node workerFamily1Actor2 = Node.Create("worker_family1_actor2", "Actor 2");
@@ -144,12 +148,15 @@ internal static class PrologNetFlowcharts
             .AddNode(workerFamily1Actor2)
             .AddNode(workerFamily1Actor3);
         Link workerFamily1MaxCapacity = Link.Create(workerFamily1, workerFamily1Actors, linkText: "max capacity file worker");
-        workersFamily
+        workerFamily1Process1
             .AddNode(workerFamily1)
             .AddNode(workerFamily1Actors)
             .AddLink(workerFamily1MaxCapacity);
+        workersFamily
+            .AddNode(workerFamily1Process1);
         
         Node workerFamily2 = Node.Create("worker_family2", "Worker 2");
+        Subgraph workerFamily1Process2 = Subgraph.Create("worker_family1_process2", "Process 2");
         Subgraph workerFamily2Actors = Subgraph.Create("worker_family2_actors", "Worker 2 actors", SubgraphDirection.TB);
         Node workerFamily2Actor1 = Node.Create("worker_family2_actor1", "Actor 1");
         Node workerFamily2Actor2 = Node.Create("worker_family2_actor2", "Actor 2");
@@ -157,10 +164,12 @@ internal static class PrologNetFlowcharts
             .AddNode(workerFamily2Actor1)
             .AddNode(workerFamily2Actor2);
         Link workerFamily2Link = Link.Create(workerFamily2, workerFamily2Actors, linkText: "extra file worker");
-        workersFamily
+        workerFamily1Process2
             .AddNode(workerFamily2)
             .AddNode(workerFamily2Actors)
             .AddLink(workerFamily2Link);
+        workersFamily
+            .AddNode(workerFamily1Process2);
         
         // School workers layer
         Subgraph workersSchool = Subgraph.Create("workers_school", "Workers for **school.pl**", SubgraphDirection.TB);
@@ -169,21 +178,85 @@ internal static class PrologNetFlowcharts
             .AddNode(workersSchool)
             .AddLink(routerToWorkersSchoolLink);
 
+        Subgraph workerSchool1Process1 = Subgraph.Create("worker_school1_process1", "Process 1", SubgraphDirection.TB);
         Node workerSchool1 = Node.Create("worker_school1", "Worker 1");
+        Node workerSchool1swipl = Node.Create<MermaidUnicodeText>("worker_school1_engine", "Worker 1 **SWI-Prolog.dll**");
+        Link workersSchool1swiplLink = Link.Create(workerSchool1, workerSchool1swipl, LinkType.Create(thickness: LinkThickness.Dotted), "P/Invoke");
         Subgraph workerSchool1Actors = Subgraph.Create("worker_school1_actors", "Worker 1 actors", SubgraphDirection.TB);
+        Link workerSchool1EngineToActorsLifecycleLink = Link.Create(workerSchool1swipl, workerSchool1Actors, LinkType.Create(arrowType: LinkArrowType.Arrow, direction: LinkDirection.Both, thickness: LinkThickness.Dotted), "`PL_create_engine / PL_destroy_engine`");
         Node workerSchool1Actor1 = Node.Create("worker_school1_actor1", "Actor 1");
         Node workerSchool1Actor2 = Node.Create("worker_school1_actor2", "Actor 2");
         workerSchool1Actors
             .AddNode(workerSchool1Actor1)
             .AddNode(workerSchool1Actor2);
         Link workerSchool1Link = Link.Create(workerSchool1, workerSchool1Actors, linkText: "file worker");
-        workersSchool
+        workerSchool1Process1
             .AddNode(workerSchool1)
+            .AddNode(workerSchool1swipl)
             .AddNode(workerSchool1Actors)
+            .AddLink(workersSchool1swiplLink)
+            .AddLink(workerSchool1EngineToActorsLifecycleLink)
             .AddLink(workerSchool1Link);
+        workersSchool
+            .AddNode(workerSchool1Process1);
 
         // Final flowchart
         supervision.AddNode(server);
         return supervision;
+    }
+
+    internal static Flowchart GetStructuredSupervisionHierarchyFlowchart()
+    {
+        // Initialize API endpoints
+        RestEndpoint rest = new();
+        GrpcEndpoint grpc = new();
+
+        // Create worker pool
+        Dictionary<string, List<PrologWorker>> activeWorkers = new()
+        {
+            ["discount_policy.pl"] =
+            [
+                new(
+                    Guid.NewGuid(),
+                    "discount_policy.pl",
+                    new(
+                        4, 
+                        [
+                            new(Guid.NewGuid()),
+                            new(Guid.NewGuid()),
+                            new(Guid.NewGuid()),
+                            new(Guid.NewGuid())
+                        ]
+                    )
+                ),
+                new(
+                    Guid.NewGuid(),
+                    "discount_policy.pl",
+                    new(
+                        4,
+                        [
+                            new(Guid.NewGuid()),
+                            new(Guid.NewGuid()),
+                        ]
+                    )
+                )
+            ],
+            ["route_planner.pl"] =
+            [
+                new(
+                    Guid.NewGuid(),
+                    "route_planner.pl",
+                    new(
+                        6,
+                        [
+                            new(Guid.NewGuid()),
+                        ]
+                    )
+                )
+            ],
+        };
+        WorkerPool workers = new(8, activeWorkers);
+        PrologServer prologServer = new(rest, grpc, workers);
+        return prologServer.ToFlowchart();
     }
 }

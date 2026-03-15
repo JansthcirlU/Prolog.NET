@@ -6,15 +6,22 @@ Console.WriteLine(flowchartsPath);
 
 foreach ((Flowchart flowchart, int i) in PrologNetFlowcharts.GetFlowcharts().Select((x, i) => (x, i)))
 {
-    string fileName = flowchart.Title?.Text?.ToLower().Replace(" ", "-") ?? $"flowchart{i+1}";
-    string path = Path.Combine(flowchartsPath, $"{fileName}.md");
-    Console.WriteLine(path);
-    string contents =
-    $"""
-    ```mermaid
-    {flowchart.ToMermaidString()}
-    ```
-    """;
-    Console.WriteLine(contents);
-    await File.WriteAllTextAsync(path, contents);
+    try
+    {
+        string fileName = flowchart.Title?.Text?.ToLower().Replace(" ", "-") ?? $"flowchart{i + 1}";
+        string path = Path.Combine(flowchartsPath, $"{fileName}.md");
+        Console.WriteLine(path);
+        string contents =
+        $"""
+        ```mermaid
+        {flowchart.ToMermaidString()}
+        ```
+        """;
+        Console.WriteLine(contents);
+        await File.WriteAllTextAsync(path, contents);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine(ex.Message);
+    }
 }
