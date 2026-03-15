@@ -17,6 +17,6 @@ HostApplicationBuilder builder = Host.CreateApplicationBuilder();
 builder.Services
     .AddPrologEngine()
     .AddPrologActors(port)
-    .AddHostedService<WorkerHost>();
+    .AddHostedService<PrologWorker>();
 
 await builder.Build().RunAsync();

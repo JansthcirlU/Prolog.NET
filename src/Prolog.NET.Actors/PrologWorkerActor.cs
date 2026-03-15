@@ -4,23 +4,24 @@ using Prolog.NET.Swipl;
 namespace Prolog.NET.Actors;
 
 /// <summary>
-/// A Proto.Actor actor that fronts a <see cref="PrologEngine"/> instance with
-/// request-reply message semantics using Protocol Buffer message types.
+/// The single named <c>"prolog"</c> actor per worker process. Handles one-shot
+/// operations (load, call, query) directly via the injected <see cref="PrologEngine"/>,
+/// and spawns a new <see cref="PrologQueryActor"/> child for each streaming query.
 /// </summary>
 /// <remarks>
-/// Supported inbound messages: <see cref="LoadFileMessage"/>, <see cref="CallMessage"/>,
-/// <see cref="QueryMessage"/>, <see cref="OpenQueryMessage"/>, <see cref="NextSolutionMessage"/>,
-/// <see cref="CloseQueryMessage"/>. Unknown messages are silently ignored.
-///
-/// Exceptions from the Prolog engine are caught per-handler and returned as error responses
-/// rather than propagating — this prevents Proto.Actor's supervisor restart strategy from
-/// firing and ensures callers always receive a reply.
+/// Concurrency is capped at <c>PROLOG_ENGINE_THREADS</c> simultaneous open queries
+/// (defaults to 1). When the cap is reached, <see cref="OpenQueryMessage"/> is rejected
+/// with <c>Failed { "No capacity" }</c> — the server-level router then decides whether
+/// to spawn a new worker process for the same file.
 /// </remarks>
-public class PrologActor(PrologEngine engine) : IActor
+public sealed class PrologWorkerActor(PrologEngine engine) : IActor
 {
-    private readonly Dictionary<Guid, PrologQuery> _openQueries = [];
+    private readonly int _maxConcurrentQueries = int.TryParse(
+        Environment.GetEnvironmentVariable("PROLOG_ENGINE_THREADS"), out int n) && n > 0 ? n : 1;
 
-    public Task ReceiveAsync(IContext context)
+    private readonly Dictionary<Guid, PID> _queryToActor = [];
+
+    public async Task ReceiveAsync(IContext context)
     {
         switch (context.Message)
         {
@@ -37,17 +38,15 @@ public class PrologActor(PrologEngine engine) : IActor
                 HandleOpenQuery(context, msg);
                 break;
             case NextSolutionMessage msg:
-                HandleNextSolution(context, msg);
+                await HandleNextSolutionAsync(context, msg);
                 break;
             case CloseQueryMessage msg:
-                HandleCloseQuery(msg);
+                HandleCloseQuery(context, msg);
                 break;
-            case Stopping:
-                CloseAllOpenQueries();
+            case Terminated terminated:
+                CleanUpTerminated(terminated.Who);
                 break;
         }
-
-        return Task.CompletedTask;
     }
 
     private void HandleLoadFile(IContext context, LoadFileMessage msg)
@@ -89,7 +88,6 @@ public class PrologActor(PrologEngine engine) : IActor
                 {
                     row.Variables[name] = solution[name].ToString();
                 }
-
                 result.Solutions.Add(row);
             }
 
@@ -103,11 +101,23 @@ public class PrologActor(PrologEngine engine) : IActor
 
     private void HandleOpenQuery(IContext context, OpenQueryMessage msg)
     {
+        if (_queryToActor.Count >= _maxConcurrentQueries)
+        {
+            context.Respond(new OpenQueryResponse
+            {
+                Failed = new OpenQueryFailedResult { Error = "No capacity" }
+            });
+            return;
+        }
+
         try
         {
             PrologQuery query = engine.OpenQuery(msg.Goal);
             Guid id = Guid.NewGuid();
-            _openQueries[id] = query;
+            Props props = Props.FromProducer(() => new PrologQueryActor(query));
+            PID queryActorPid = context.Spawn(props);
+            context.Watch(queryActorPid);
+            _queryToActor[id] = queryActorPid;
             context.Respond(new OpenQueryResponse
             {
                 Opened = new QueryOpenedResult { QueryId = id.ToString() }
@@ -122,71 +132,52 @@ public class PrologActor(PrologEngine engine) : IActor
         }
     }
 
-    private void HandleNextSolution(IContext context, NextSolutionMessage msg)
+    private async Task HandleNextSolutionAsync(IContext context, NextSolutionMessage msg)
     {
-        if (!Guid.TryParse(msg.QueryId, out Guid id) || !_openQueries.TryGetValue(id, out PrologQuery? query))
+        if (!Guid.TryParse(msg.QueryId, out Guid id) || !_queryToActor.TryGetValue(id, out PID? queryActorPid))
         {
             context.Respond(new NextSolutionResponse { NoMore = new NoMoreSolutionsResult() });
             return;
         }
 
-        try
-        {
-            if (query.Next())
-            {
-                Dictionary<string, string> vars = BuildVars(query.Current!);
+        using CancellationTokenSource cts = new(TimeSpan.FromSeconds(30));
+        NextSolutionResponse response = await context.System.Root.RequestAsync<NextSolutionResponse>(
+            queryActorPid, msg, cts.Token);
 
-                if (query.IsLastSolution)
-                {
-                    _ = _openQueries.Remove(id);
-                    query.Dispose();
-                    FinalSolutionResult result = new();
-                    result.Variables.Add(vars);
-                    context.Respond(new NextSolutionResponse { FinalSolution = result });
-                }
-                else
-                {
-                    SolutionResult result = new();
-                    result.Variables.Add(vars);
-                    context.Respond(new NextSolutionResponse { Solution = result });
-                }
-            }
-            else
-            {
-                _ = _openQueries.Remove(id);
-                query.Dispose();
-                context.Respond(new NextSolutionResponse { NoMore = new NoMoreSolutionsResult() });
-            }
-        }
-        catch (PrologException ex)
+        bool done = response.ResultCase is
+            NextSolutionResponse.ResultOneofCase.FinalSolution or
+            NextSolutionResponse.ResultOneofCase.NoMore or
+            NextSolutionResponse.ResultOneofCase.Failed;
+
+        if (done)
         {
-            _ = _openQueries.Remove(id);
-            query.Dispose();
-            context.Respond(new NextSolutionResponse
-            {
-                Failed = new QueryFailedResult { Error = ex.PrologMessage ?? ex.Message }
-            });
+            _queryToActor.Remove(id);
         }
+
+        context.Respond(response);
     }
 
-    private void HandleCloseQuery(CloseQueryMessage msg)
+    private void HandleCloseQuery(IContext context, CloseQueryMessage msg)
     {
-        if (Guid.TryParse(msg.QueryId, out Guid id) && _openQueries.Remove(id, out PrologQuery? query))
+        if (Guid.TryParse(msg.QueryId, out Guid id) && _queryToActor.Remove(id, out PID? queryActorPid))
         {
-            query.Dispose();
+            context.System.Root.Send(queryActorPid, msg);
         }
     }
 
-    private void CloseAllOpenQueries()
+    /// <summary>
+    /// Removes the dictionary entry for a query actor that terminated unexpectedly
+    /// (i.e. before <see cref="HandleNextSolutionAsync"/> had a chance to clean it up).
+    /// </summary>
+    private void CleanUpTerminated(PID terminated)
     {
-        foreach (PrologQuery query in _openQueries.Values)
+        foreach ((Guid id, PID pid) in _queryToActor)
         {
-            query.Dispose();
+            if (pid.Equals(terminated))
+            {
+                _queryToActor.Remove(id);
+                return;
+            }
         }
-
-        _openQueries.Clear();
     }
-
-    private static Dictionary<string, string> BuildVars(PrologSolution solution)
-        => solution.VariableNames.ToDictionary(name => name, name => solution[name].ToString());
 }

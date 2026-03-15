@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading.Channels;
 using Prolog.NET.Swipl.Generated;
 
 namespace Prolog.NET.Swipl;
@@ -16,9 +17,12 @@ namespace Prolog.NET.Swipl;
 /// down. The engine must be initialized before any Prolog operations are performed.
 /// </para>
 /// <para>
-/// All SWI-Prolog foreign-interface calls are marshalled to a single dedicated thread that
-/// owns the engine for its lifetime. This satisfies SWI-Prolog's thread-local-storage
-/// requirement on Linux and macOS, and is equally correct on Windows.
+/// FLI operations are dispatched to a pool of SWI-Prolog attached threads. The pool size
+/// is controlled by the <c>PROLOG_ENGINE_THREADS</c> environment variable (default: 1).
+/// Each <see cref="PrologQuery"/> leases one thread for its entire lifetime, ensuring all
+/// FLI calls for that query execute on the same OS thread as required by SWI-Prolog.
+/// Non-query operations (<see cref="Call"/>, <see cref="LoadFile"/>) lease a thread, use
+/// it, and return it immediately.
 /// </para>
 /// <para>
 /// Disposing the engine calls <c>PL_cleanup</c>, which shuts down the Prolog runtime.
@@ -30,48 +34,49 @@ public sealed class PrologEngine : IDisposable
     private static PrologEngine? _instance;
     private static readonly Lock _lock = new();
 
-    private readonly Thread _prologThread;
-    private readonly BlockingCollection<Action> _workQueue = [];
+    private readonly PrologWorkerThread[] _pool;
+    private readonly Channel<PrologWorkerThread> _idleThreads;
     private bool _disposed;
 
     private PrologEngine(string[]? args)
     {
-        using ManualResetEventSlim initDone = new(false);
-        Exception? initError = null;
+        int threadCount = int.TryParse(
+            Environment.GetEnvironmentVariable("PROLOG_ENGINE_THREADS"), out int n) && n > 0 ? n : 1;
 
-        _prologThread = new Thread(() =>
-        {
-            try
-            {
-                InitializeNative(args);
-            }
-            catch (Exception ex)
-            {
-                initError = ex;
-                initDone.Set();
-                return;
-            }
+        _pool = new PrologWorkerThread[threadCount];
+        _idleThreads = Channel.CreateUnbounded<PrologWorkerThread>();
 
-            initDone.Set();
+        // Thread 0: the main Prolog thread — calls PL_initialise on startup.
+        _pool[0] = new PrologWorkerThread(isMainThread: true, index: 0, args);
+        _pool[0].Start();
 
-            foreach (Action work in _workQueue.GetConsumingEnumerable())
-            {
-                work();
-            }
-
-            unsafe { _ = SwiPrologNative.PL_cleanup(0); }
-        })
-        {
-            IsBackground = true,
-            Name = "SWI-Prolog"
-        };
-        _prologThread.Start();
-
-        initDone.Wait();
-
+        Exception? initError = _pool[0].WaitReady();
         if (initError != null)
         {
             ExceptionDispatchInfo.Capture(initError).Throw();
+        }
+
+        // Threads 1..N-1: non-main threads — call PL_thread_attach_engine on startup.
+        // PL_initialise must have completed on thread 0 before these are started.
+        for (int i = 1; i < threadCount; i++)
+        {
+            _pool[i] = new PrologWorkerThread(isMainThread: false, index: i, null);
+            _pool[i].Start();
+        }
+
+        for (int i = 1; i < threadCount; i++)
+        {
+            initError = _pool[i].WaitReady();
+            if (initError != null)
+            {
+                ExceptionDispatchInfo.Capture(initError).Throw();
+            }
+        }
+
+        // All threads ready — populate the idle pool.
+        foreach (PrologWorkerThread t in _pool)
+        {
+            _idleThreads.Writer.TryWrite(t);
         }
     }
 
@@ -119,78 +124,21 @@ public sealed class PrologEngine : IDisposable
     }
 
     /// <summary>
-    /// Runs <paramref name="work"/> on the dedicated Prolog thread, blocking the caller
-    /// until it completes. Exceptions are captured and re-thrown on the calling thread.
+    /// Leases an idle worker thread from the pool, blocking until one is available.
+    /// The caller must return the thread via <see cref="ReturnThread"/> when done.
     /// </summary>
-    internal void RunOnPrologThread(Action work)
+    internal PrologWorkerThread LeaseThread()
     {
         ThrowIfDisposed();
-
-        if (Thread.CurrentThread == _prologThread)
-        {
-            work();
-            return;
-        }
-
-        using ManualResetEventSlim done = new(false);
-        Exception? error = null;
-
-        try
-        {
-            _workQueue.Add(() =>
-            {
-                try { work(); }
-                catch (Exception ex) { error = ex; }
-                finally { done.Set(); }
-            });
-        }
-        catch (InvalidOperationException)
-        {
-            throw new ObjectDisposedException(nameof(PrologEngine));
-        }
-
-        done.Wait();
-        if (error != null)
-        {
-            ExceptionDispatchInfo.Capture(error).Throw();
-        }
+        return _idleThreads.Reader.ReadAsync().AsTask().GetAwaiter().GetResult();
     }
 
-    /// <inheritdoc cref="RunOnPrologThread(Action)"/>
-    internal T RunOnPrologThread<T>(Func<T> work)
+    /// <summary>
+    /// Returns a previously leased thread to the idle pool.
+    /// </summary>
+    internal void ReturnThread(PrologWorkerThread thread)
     {
-        ThrowIfDisposed();
-
-        if (Thread.CurrentThread == _prologThread)
-        {
-            return work();
-        }
-
-        using ManualResetEventSlim done = new(false);
-        T result = default!;
-        Exception? error = null;
-
-        try
-        {
-            _workQueue.Add(() =>
-            {
-                try { result = work(); }
-                catch (Exception ex) { error = ex; }
-                finally { done.Set(); }
-            });
-        }
-        catch (InvalidOperationException)
-        {
-            throw new ObjectDisposedException(nameof(PrologEngine));
-        }
-
-        done.Wait();
-        if (error != null)
-        {
-            ExceptionDispatchInfo.Capture(error).Throw();
-        }
-
-        return result;
+        _idleThreads.Writer.TryWrite(thread);
     }
 
     private static unsafe void InitializeNative(string[]? args)
@@ -244,14 +192,19 @@ public sealed class PrologEngine : IDisposable
     /// <exception cref="PrologException">Thrown if the file cannot be loaded.</exception>
     public void LoadFile(string path)
     {
-        RunOnPrologThread(() =>
+        PrologWorkerThread thread = LeaseThread();
+        try
         {
-            string escaped = EscapeSingleQuotes(path);
-            if (!CallCore($"consult('{escaped}')"))
+            thread.Run(() =>
             {
-                throw new PrologException($"consult/1 failed for: {path}");
-            }
-        });
+                string escaped = EscapeSingleQuotes(path);
+                if (!CallCore($"consult('{escaped}')"))
+                {
+                    throw new PrologException($"consult/1 failed for: {path}");
+                }
+            });
+        }
+        finally { ReturnThread(thread); }
     }
 
     /// <summary>
@@ -264,7 +217,12 @@ public sealed class PrologEngine : IDisposable
     /// <exception cref="PrologException">
     /// Thrown if the goal string cannot be parsed or if Prolog raises an exception.
     /// </exception>
-    public bool Call(string goal) => RunOnPrologThread(() => CallCore(goal));
+    public bool Call(string goal)
+    {
+        PrologWorkerThread thread = LeaseThread();
+        try { return thread.Run(() => CallCore(goal)); }
+        finally { ReturnThread(thread); }
+    }
 
     /// <summary>
     /// Opens a Prolog query for the given goal. Variables in the goal are automatically
@@ -277,8 +235,12 @@ public sealed class PrologEngine : IDisposable
     /// A <see cref="PrologQuery"/> that must be disposed after use.
     /// </returns>
     /// <exception cref="PrologException">Thrown if the goal cannot be parsed.</exception>
-    public PrologQuery OpenQuery(string goal) =>
-        RunOnPrologThread(() => new PrologQuery(goal, this));
+    public PrologQuery OpenQuery(string goal)
+    {
+        PrologWorkerThread thread = LeaseThread();
+        // The query constructor runs on the leased thread and retains it for its lifetime.
+        return thread.Run(() => new PrologQuery(goal, this, thread));
+    }
 
     /// <inheritdoc/>
     public void Dispose()
@@ -292,11 +254,23 @@ public sealed class PrologEngine : IDisposable
 
             _disposed = true;
             _instance = null;
-
-            // Signal the work loop to stop; PL_cleanup runs at the end of the thread.
-            _workQueue.CompleteAdding();
-            _prologThread.Join();
         }
+
+        // Signal non-main threads to drain and exit; they call PL_thread_destroy_engine.
+        for (int i = 1; i < _pool.Length; i++)
+        {
+            _pool[i].CompleteAdding();
+        }
+
+        for (int i = 1; i < _pool.Length; i++)
+        {
+            _pool[i].Join();
+        }
+
+        // Queue PL_cleanup on the main Prolog thread (must run there), then shut it down.
+        _pool[0].Run(() => { unsafe { _ = SwiPrologNative.PL_cleanup(0); } });
+        _pool[0].CompleteAdding();
+        _pool[0].Join();
     }
 
     private unsafe bool CallCore(string goal)
@@ -384,5 +358,128 @@ public sealed class PrologEngine : IDisposable
         }
 
         return null;
+    }
+
+    // -------------------------------------------------------------------------
+    // PrologWorkerThread — an OS thread attached to the SWI-Prolog FLI.
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// An OS thread permanently attached to the SWI-Prolog foreign-language interface.
+    /// Thread 0 calls <c>PL_initialise</c>; threads 1..N call
+    /// <c>PL_thread_attach_engine</c> / <c>PL_thread_destroy_engine</c>.
+    /// </summary>
+    internal sealed class PrologWorkerThread
+    {
+        private readonly BlockingCollection<Action> _queue = [];
+        private readonly ManualResetEventSlim _readySignal = new(false);
+        private Exception? _startError;
+
+        public readonly Thread Thread;
+
+        public PrologWorkerThread(bool isMainThread, int index, string[]? initArgs)
+        {
+            Thread = new Thread(() =>
+            {
+                try
+                {
+                    if (isMainThread)
+                    {
+                        InitializeNative(initArgs);
+                    }
+                    else
+                    {
+                        unsafe { _ = SwiPrologNative.PL_thread_attach_engine(null); }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _startError = ex;
+                    _readySignal.Set();
+                    return;
+                }
+
+                _readySignal.Set();
+
+                foreach (Action work in _queue.GetConsumingEnumerable())
+                {
+                    work();
+                }
+
+                if (!isMainThread)
+                {
+                    unsafe { _ = SwiPrologNative.PL_thread_destroy_engine(); }
+                }
+            })
+            {
+                IsBackground = true,
+                Name = $"SWI-Prolog-{index}"
+            };
+        }
+
+        public void Start() => Thread.Start();
+
+        /// <summary>
+        /// Blocks until the thread's startup (attach/initialise) completes.
+        /// Returns the startup exception, or <see langword="null"/> on success.
+        /// </summary>
+        public Exception? WaitReady()
+        {
+            _readySignal.Wait();
+            return _startError;
+        }
+
+        /// <summary>
+        /// Posts <paramref name="work"/> to this thread's queue and blocks until it completes.
+        /// </summary>
+        public void Run(Action work)
+        {
+            using ManualResetEventSlim done = new(false);
+            Exception? error = null;
+
+            _queue.Add(() =>
+            {
+                try { work(); }
+                catch (Exception ex) { error = ex; }
+                finally { done.Set(); }
+            });
+
+            done.Wait();
+
+            if (error != null)
+            {
+                ExceptionDispatchInfo.Capture(error).Throw();
+            }
+        }
+
+        /// <inheritdoc cref="Run(Action)"/>
+        public T Run<T>(Func<T> work)
+        {
+            using ManualResetEventSlim done = new(false);
+            T result = default!;
+            Exception? error = null;
+
+            _queue.Add(() =>
+            {
+                try { result = work(); }
+                catch (Exception ex) { error = ex; }
+                finally { done.Set(); }
+            });
+
+            done.Wait();
+
+            if (error != null)
+            {
+                ExceptionDispatchInfo.Capture(error).Throw();
+            }
+
+            return result;
+        }
+
+        /// <summary>Signals the thread to stop accepting new work after draining its queue.</summary>
+        public void CompleteAdding() => _queue.CompleteAdding();
+
+        /// <summary>Blocks until the thread has exited.</summary>
+        public void Join() => Thread.Join();
     }
 }

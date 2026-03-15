@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package prolog.service;
+option csharp_namespace = "Prolog.NET.Server";
+
+// Public gRPC API exposed by Prolog.NET.Server to external clients.
+// Internal server↔worker communication uses the messages in Prolog.NET.Actors.
+
+service PrologService {
+  // Opens a query against a loaded knowledge base file and streams solutions
+  // one by one until exhausted, closed, or an error occurs.
+  rpc Query(QueryRequest) returns (stream SolutionResponse);
+}
+
+message QueryRequest {
+  string file_path = 1;
+  string goal = 2;
+}
+
+// One variable binding set.
+message SolutionVars {
+  map<string, string> variables = 1;
+}
+
+// Sentinel message included as the final stream item when solutions are exhausted.
+message NoMoreSolutions {}
+
+// Each item in the server-side stream is one of: a solution, a no-more sentinel,
+// or an error string.
+message SolutionResponse {
+  oneof result {
+    SolutionVars solution = 1;
+    NoMoreSolutions no_more = 2;
+    string error = 3;
+  }
+}
