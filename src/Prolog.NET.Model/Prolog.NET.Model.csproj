@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
     <PackageId>Prolog.NET.Model</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <Description>Schema-first DSL for constructing typed Prolog databases in C# and serializing them to .pl files. Use alongside Prolog.NET.Model.Generator.</Description>
     <PackageTags>prolog;dsl;serialization;logic-programming;ai-assisted</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
