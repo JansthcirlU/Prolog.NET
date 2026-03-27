@@ -1,5 +1,3 @@
-using Prolog.NET.Model;
-
 namespace Prolog.NET.Model.Examples;
 
 [PrologFunctor<PrologArgument>("s")]
@@ -19,7 +17,7 @@ public static class EvenOddExample
 {
     public static PrologDatabase Build()
     {
-        PrologIntAtom zero = PrologDSL.Atom.CreateInt(0);
+        PrologInteger zero = PrologDSL.Atom.CreateInt(0);
 
         return PrologDSL.Database.Create([
             Even.Fact(zero),

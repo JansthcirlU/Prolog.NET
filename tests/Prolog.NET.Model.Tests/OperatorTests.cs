@@ -1,5 +1,3 @@
-using Prolog.NET.Model;
-
 namespace Prolog.NET.Model.Tests;
 
 public class OperatorTests

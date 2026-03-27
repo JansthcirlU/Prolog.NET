@@ -1,5 +1,3 @@
-using Prolog.NET.Model;
-
 namespace Prolog.NET.Model.Tests;
 
 public static partial class MathUtils
@@ -68,7 +66,7 @@ public class EndToEndTests
                 .AddDefinition(rule => rule
                     .Variables("X", (x, r) => r
                         .Arguments(x)
-                        .Body(PrologDSL.Goals.Not(PrologDSL.Goals.ArithLt(x, new PrologIntAtom(0)))))),
+                        .Body(PrologDSL.Goals.Not(PrologDSL.Goals.ArithLt(x, new PrologInteger(0)))))),
 
             MathUtils.ArithEqual.Rule()
                 .AddDefinition(rule => rule

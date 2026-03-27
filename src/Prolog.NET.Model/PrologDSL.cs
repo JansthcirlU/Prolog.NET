@@ -3,11 +3,29 @@ namespace Prolog.NET.Model;
 public static class PrologDSL
 {
     public static PrologWildcard Wildcard => PrologWildcard.Instance;
+    public static PrologList Nil => PrologList.Nil.Instance;
+
+    public static PrologList List(IReadOnlyList<PrologTerm> elements)
+    {
+        if (elements.Count == 0)
+        {
+            return PrologList.Nil.Instance;
+        }
+
+        PrologList tail = PrologList.Nil.Instance;
+        for (int i = elements.Count - 1; i >= 0; i--)
+        {
+            tail = new PrologList.Cons(elements[i], tail);
+        }
+        return tail;
+    }
 
     public static class Atom
     {
         public static PrologAtom Create(string name) => new(name);
-        public static PrologIntAtom CreateInt(long value) => new(value);
+        public static PrologInteger CreateInt(long value) => new(value);
+        public static PrologFloat CreateFloat(double value) => new(value);
+        public static PrologString CreateString(string value) => new(value);
     }
 
     public static class Database
