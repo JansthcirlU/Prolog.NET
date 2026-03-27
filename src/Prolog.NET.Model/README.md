@@ -116,13 +116,13 @@ public static partial class ResidentsModule
 Building the databases:
 
 ```csharp
-var alice       = PrologDSL.Atom.Create("alice");
-var smith       = PrologDSL.Atom.Create("smith");
-var bob         = PrologDSL.Atom.Create("bob");
-var jones       = PrologDSL.Atom.Create("jones");
-var elm         = PrologDSL.Atom.Create("elm");
-var springfield = PrologDSL.Atom.Create("springfield");
-var n42         = PrologDSL.Atom.CreateInt(42);
+PrologAtom alice = PrologDSL.Atom.Create("alice");
+PrologAtom smith = PrologDSL.Atom.Create("smith");
+PrologAtom bob = PrologDSL.Atom.Create("bob");
+PrologAtom jones = PrologDSL.Atom.Create("jones");
+PrologAtom elm = PrologDSL.Atom.Create("elm");
+PrologAtom springfield = PrologDSL.Atom.Create("springfield");
+PrologInteger n42 = PrologDSL.Atom.CreateInt(42);
 
 PrologModule person = PrologDSL.Module.Create("person", [
     PersonModule.Person.Fact(PersonModule.Name.Of(alice, smith)),   // person(name(alice, smith)).
@@ -159,8 +159,8 @@ PrologModule residents = PrologDSL.Module.Create("residents", [
 ### Serializing
 
 ```csharp
-string personSource    = PrologSerializer.Serialize(person);
-string addressSource   = PrologSerializer.Serialize(addresses);
+string personSource = PrologSerializer.Serialize(person);
+string addressSource = PrologSerializer.Serialize(addresses);
 string residentsSource = PrologSerializer.Serialize(residents);
 ```
 
@@ -194,7 +194,7 @@ End-to-end serialization tests for this package live in `tests/Prolog.NET.Model.
 
 | Type | Description |
 |------|-------------|
-| `PrologDSL` | Static entry point; `PrologDSL.Atom.Create`, `PrologDSL.Atom.CreateInt`, `PrologDSL.Database.Create`, `PrologDSL.Module.Create` |
+| `PrologDSL` | Static entry point; `PrologDSL.Atom.Create`, `PrologDSL.Atom.CreateInt`, `PrologDSL.Atom.CreateFloat`, `PrologDSL.Atom.CreateString`, `PrologDSL.Nil`, `PrologDSL.List`, `PrologDSL.Database.Create`, `PrologDSL.Module.Create` |
 
 ### Database Types
 
@@ -208,8 +208,13 @@ End-to-end serialization tests for this package live in `tests/Prolog.NET.Model.
 | Type | Description |
 |------|-------------|
 | `PrologAtom` | A named atom |
-| `PrologIntAtom` | An integer atom (`long`) |
-| `PrologVariable` | A Prolog variable |
+| `PrologInteger` | An integer (`long`) |
+| `PrologFloat` | A floating-point number (`double`) |
+| `PrologString` | A double-quoted string |
+| `PrologVariable` | A Prolog variable (starts with uppercase or `_`) |
+| `PrologWildcard` | The anonymous variable `_` (singleton) |
+| `PrologNil` | The empty list `[]` (singleton) |
+| `PrologList` | A list pair `[Head|Tail]` |
 | `PrologCompound` | A compound term with a functor and arguments |
 
 ### Body Goal Types

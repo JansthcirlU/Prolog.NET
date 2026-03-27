@@ -17,7 +17,24 @@ public sealed record PrologAtom : PrologTerm
     }
 }
 
-public sealed record PrologIntAtom(long Value) : PrologTerm;
+public sealed record PrologInteger(long Value) : PrologTerm;
+
+public sealed record PrologFloat(double Value) : PrologTerm;
+
+public sealed record PrologString : PrologTerm
+{
+    public string Value { get; init; }
+
+    public PrologString(string value)
+    {
+        if (value is null)
+        {
+            throw new ArgumentNullException(nameof(value));
+        }
+
+        Value = value;
+    }
+}
 
 public sealed record PrologVariable : PrologTerm
 {
@@ -54,6 +71,17 @@ public sealed record PrologWildcard : PrologTerm
     public static readonly PrologWildcard Instance = new();
 
     private PrologWildcard() { }
+}
+
+public abstract record PrologList : PrologTerm
+{
+    public sealed record Nil : PrologList
+    {
+        public static readonly Nil Instance = new();
+
+        private Nil() { }
+    }
+    public sealed record Cons(PrologTerm Head, PrologTerm Tail) : PrologList;
 }
 
 public sealed record PrologCompound : PrologTerm

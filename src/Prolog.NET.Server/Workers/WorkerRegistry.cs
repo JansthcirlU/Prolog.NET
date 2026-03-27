@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Hosting;
 using Proto;
 using Prolog.NET.Actors;
 using SystemProcess = System.Diagnostics.Process;

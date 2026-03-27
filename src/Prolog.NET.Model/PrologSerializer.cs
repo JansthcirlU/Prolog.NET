@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 
 namespace Prolog.NET.Model;
@@ -108,12 +109,40 @@ public static class PrologSerializer
     private static string SerializeTerm(PrologTerm term) => term switch
     {
         PrologAtom atom => SerializeAtom(atom.Name),
-        PrologIntAtom intAtom => intAtom.Value.ToString(),
+        PrologInteger integer => integer.Value.ToString(),
+        PrologFloat f => f.Value.ToString("G", CultureInfo.InvariantCulture),
+        PrologString str => "\"" + str.Value.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"",
         PrologWildcard => "_",
         PrologVariable variable => variable.Name,
+        PrologList l => SerializeList(l),
         PrologCompound compound => $"{SerializeAtom(compound.Functor)}({string.Join(", ", compound.Args.Select(SerializeTerm))})",
         _ => throw new ArgumentException($"Unknown term type: {term.GetType().Name}"),
     };
+
+    private static string SerializeList(PrologList term)
+    {
+        if (term is PrologList.Nil)
+        {
+            return "[]";
+        }
+
+        List<string> elements = [];
+        PrologTerm current = term;
+
+        while (current is PrologList.Cons list)
+        {
+            elements.Add(SerializeTerm(list.Head));
+            current = list.Tail;
+        }
+
+        if (current is PrologList.Nil)
+        {
+            return $"[{string.Join(", ", elements)}]";
+        }
+
+        // Partial list: [e1, e2 | Tail]
+        return $"[{string.Join(", ", elements)} | {SerializeTerm(current)}]";
+    }
 
     private static string SerializeBody(BodyGoal goal, string? moduleName = null) => goal switch
     {

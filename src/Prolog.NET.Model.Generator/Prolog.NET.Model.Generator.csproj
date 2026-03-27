@@ -8,7 +8,7 @@
     <!-- Analyzers must not emit output assemblies into the referencing project -->
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <PackageId>Prolog.NET.Model.Generator</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <Description>Roslyn incremental source generator for Prolog.NET.Model. Emits strongly-typed Fact, Query, Rule, and Of factory methods from PrologRelation and PrologFunctor attribute declarations.</Description>
     <PackageTags>prolog;source-generator;roslyn;analyzer;codegen;ai-assisted</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>

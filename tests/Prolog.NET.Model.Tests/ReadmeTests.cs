@@ -1,5 +1,3 @@
-using Prolog.NET.Model;
-
 namespace Prolog.NET.Model.Tests;
 
 public static partial class PersonModule
@@ -43,7 +41,7 @@ public class ReadmeTests
     private static readonly PrologAtom Jones = PrologDSL.Atom.Create("jones");
     private static readonly PrologAtom Elm = PrologDSL.Atom.Create("elm");
     private static readonly PrologAtom Springfield = PrologDSL.Atom.Create("springfield");
-    private static readonly PrologIntAtom N42 = PrologDSL.Atom.CreateInt(42);
+    private static readonly PrologInteger N42 = PrologDSL.Atom.CreateInt(42);
 
     [Fact]
     public void PersonModule_SerializesCorrectly()

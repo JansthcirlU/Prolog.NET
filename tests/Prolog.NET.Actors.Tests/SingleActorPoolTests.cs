@@ -1,6 +1,3 @@
-using Proto;
-using Prolog.NET.Actors;
-
 namespace Prolog.NET.Actors.Tests;
 
 [Collection("PrologActors")]

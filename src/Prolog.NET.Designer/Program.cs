@@ -1,7 +1,7 @@
 using Prolog.NET.Designer.Modules;
 using Prolog.NET.Model;
 
-PrologIntAtom zero = PrologDSL.Atom.CreateInt(0);
+PrologInteger zero = PrologDSL.Atom.CreateInt(0);
 PrologAtom homer = PrologDSL.Atom.Create("homer");
 PrologAtom marge = PrologDSL.Atom.Create("marge");
 PrologAtom bart = PrologDSL.Atom.Create("bart");

@@ -19,11 +19,11 @@ internal record PrologServer(RestEndpoint Rest, GrpcEndpoint Grpc, WorkerPool Wo
         Node prologServer = Node.Create("prolog_server", "Prolog Server");
         Link restApiToPrologServer = Link.Create(restApi, prologServer, LinkType.Create(LinkArrowType.Arrow, LinkDirection.Both, LinkThickness.Normal), "Request / Response");
         Link grpcToPrologServer = Link.Create(grpc, prologServer, LinkType.Create(LinkArrowType.Arrow, LinkDirection.Both, LinkThickness.Normal), "Server Streaming");
-        
+
         // Add worker pool subgraph
         Subgraph workers = WorkerPool.ToSubgraph();
         Link prologServerToWorkersLink = Link.Create(prologServer, workers, LinkType.Create(LinkArrowType.Arrow, LinkDirection.Both, LinkThickness.Thick), "Inter-Process Communication");
-        
+
         // Finalize flowchart creation
         return flowchart
             .AddNode(restApi)

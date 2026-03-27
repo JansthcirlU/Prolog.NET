@@ -9,7 +9,7 @@ internal abstract record PrologEngineResponse
 
     internal static SolutionResponse Solution(string value)
         => new(value);
-    
+
     internal static FinalSolutionResponse FinalSolution(string value)
         => new(value);
 
@@ -24,7 +24,7 @@ internal abstract class PrologEngineException : Exception
 {
     internal PrologEngineException(string? message) : base(message)
     {
-        
+
     }
 
     internal sealed class EngineNotInitializedException : PrologEngineException
@@ -54,7 +54,7 @@ internal abstract class PrologEngineException : Exception
 
     internal static EngineNotInitializedException EngineNotInitialized(string? message)
         => new(message);
-    
+
     internal static InvalidQueryException InvalidQuery(string? message)
         => new(message);
 
