@@ -16,13 +16,13 @@ internal abstract record QuerierResponse
 
     internal static NextResponse Next(PrologWorkerResponse prologWorkerResponse, NextSolutionToken token)
         => new(prologWorkerResponse, token);
-    
+
     internal static QueryExhaustedResponse Exhausted()
         => new();
-    
+
     internal static QuerierInterruptedResponse QuerierInterrupted()
         => new();
-    
+
     internal static InvalidTokenResponse InvalidToken(NextSolutionToken token)
         => new(token);
 
@@ -31,10 +31,10 @@ internal abstract record QuerierResponse
 
     internal static ExceptionResponse FromException(Exception exception)
         => new(exception);
-    
+
     internal static PrologEngineExceptionResponse FromEngineException(PrologEngineException prologEngineException)
         => new(prologEngineException);
-    
+
     internal static PrologWorkerExceptionResponse FromWorkerException(PrologWorkerException prologWorkerException)
         => new(prologWorkerException);
 }

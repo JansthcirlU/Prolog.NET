@@ -9,7 +9,7 @@ internal abstract record PrologWorkerResponse
 
     internal static EngineResponse FromEngine(PrologEngineResponse response)
         => new(response);
-    
+
     internal static ExceptionResponse FromException(PrologWorkerException exception)
         => new(exception);
 }
@@ -18,10 +18,10 @@ internal class PrologWorkerException : Exception
 {
     internal PrologWorkerException(string? message) : base(message)
     {
-        
+
     }
     internal PrologWorkerException(string? message, Exception innerException) : base(message, innerException)
     {
-        
+
     }
 }

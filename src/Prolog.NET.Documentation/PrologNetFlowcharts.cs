@@ -29,7 +29,7 @@ internal static class PrologNetFlowcharts
         architecture
             .AddNode(family)
             .AddNode(school);
-        
+
         // Communication protocols
         Node http = Node.Create("api_http", "HTTP");
         Node grpc = Node.Create("api_grpc", "gRPC");
@@ -104,7 +104,7 @@ internal static class PrologNetFlowcharts
             .AddLink(workerFamilyToActorFamily2)
             .AddLink(workerSchoolToActorSchool1)
             .AddLink(workerSchoolToActorSchool2);
-        
+
         // File linking
         Link actorFamily1ToFamily = Link.Create(actorFamily1, family, linkText: httpQueryFamilyId.ToString(), linkStyle: httpQueryFamilyStyle);
         Link actorFamily2ToFamily = Link.Create(actorFamily2, family, linkText: grpcQueryFamilyId.ToString(), linkStyle: grpcQueryFamilyStyle);
@@ -136,7 +136,7 @@ internal static class PrologNetFlowcharts
         server
             .AddNode(workersFamily)
             .AddLink(routerToWorkersFamilyLink);
-        
+
         Node workerFamily1 = Node.Create("worker_family1", "Worker 1");
         Subgraph workerFamily1Process1 = Subgraph.Create("worker_family1_process1", "Process 1");
         Subgraph workerFamily1Actors = Subgraph.Create("worker_family1_actors", "Worker 1 actors", SubgraphDirection.TB);
@@ -154,7 +154,7 @@ internal static class PrologNetFlowcharts
             .AddLink(workerFamily1MaxCapacity);
         workersFamily
             .AddNode(workerFamily1Process1);
-        
+
         Node workerFamily2 = Node.Create("worker_family2", "Worker 2");
         Subgraph workerFamily1Process2 = Subgraph.Create("worker_family1_process2", "Process 2");
         Subgraph workerFamily2Actors = Subgraph.Create("worker_family2_actors", "Worker 2 actors", SubgraphDirection.TB);
@@ -170,7 +170,7 @@ internal static class PrologNetFlowcharts
             .AddLink(workerFamily2Link);
         workersFamily
             .AddNode(workerFamily1Process2);
-        
+
         // School workers layer
         Subgraph workersSchool = Subgraph.Create("workers_school", "Workers for **school.pl**", SubgraphDirection.TB);
         Link routerToWorkersSchoolLink = Link.Create(router, workersSchool, linkText: "**school.pl** communication");
@@ -220,7 +220,7 @@ internal static class PrologNetFlowcharts
                     Guid.NewGuid(),
                     "discount_policy.pl",
                     new(
-                        4, 
+                        4,
                         [
                             new(Guid.NewGuid()),
                             new(Guid.NewGuid()),

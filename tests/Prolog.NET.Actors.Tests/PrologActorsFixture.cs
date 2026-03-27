@@ -1,7 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Proto;
 using Proto.DependencyInjection;
-using Prolog.NET.Actors;
 using Prolog.NET.Swipl;
 
 namespace Prolog.NET.Actors.Tests;
