@@ -8,11 +8,15 @@ public unsafe class SwiPrologTests
     [Fact]
     public void PrologBasicLifecycleTest()
     {
-        // Arrange
+        // swipl check + Unix initialisation
+        string? swipl = Utils.Which("swipl").FirstOrDefault();
+        ArgumentNullException.ThrowIfNull(swipl);
         if (OperatingSystem.IsLinux())
         {
-            Environment.SetEnvironmentVariable("SWI_HOME_DIR", "/usr/bin/swipl");
+            Environment.SetEnvironmentVariable("SWI_HOME_DIR", swipl);
         }
+        
+        // Arrange
         string firstArgument = "swipl";
         byte[] argumentBytes = Encoding.UTF8.GetBytes(firstArgument + "\0");
         int argc = 1; // Argument count
