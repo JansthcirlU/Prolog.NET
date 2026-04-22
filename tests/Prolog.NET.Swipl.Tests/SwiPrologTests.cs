@@ -9,9 +9,11 @@ public unsafe class SwiPrologTests
     public void PrologBasicLifecycleTest()
     {
         // Arrange
-        string firstArgument = OperatingSystem.IsLinux()
-            ? Environment.ProcessPath ?? "swipl"
-            : "swipl";
+        if (OperatingSystem.IsLinux())
+        {
+            Environment.SetEnvironmentVariable("SWI_HOME_DIR", "/usr/bin/swipl");
+        }
+        string firstArgument = "swipl";
         byte[] argumentBytes = Encoding.UTF8.GetBytes(firstArgument + "\0");
         int argc = 1; // Argument count
 
