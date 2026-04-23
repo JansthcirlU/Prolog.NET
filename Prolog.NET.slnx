@@ -7,5 +7,6 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Prolog.NET.Model.Tests/Prolog.NET.Model.Tests.csproj" />
+    <Project Path="tests/Prolog.NET.Swipl.Tests/Prolog.NET.Swipl.Tests.csproj" />
   </Folder>
 </Solution>

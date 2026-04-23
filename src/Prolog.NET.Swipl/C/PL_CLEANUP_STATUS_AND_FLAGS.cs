@@ -1,0 +1,8 @@
+namespace Prolog.NET.Swipl.C;
+
+[Flags]
+internal enum PL_CLEANUP_STATUS_AND_FLAGS
+{
+    PL_CLEANUP_NO_RECLAIM_MEMORY = 0x10000,
+    PL_CLEANUP_NO_CANCEL = 0x20000
+}

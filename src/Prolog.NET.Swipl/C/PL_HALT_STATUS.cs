@@ -1,0 +1,9 @@
+namespace Prolog.NET.Swipl.C;
+
+[Flags]
+internal enum PL_HALT_STATUS
+{
+    PL_CLEANUP_NO_RECLAIM_MEMORY = 0x10000,
+    PL_CLEANUP_NO_CANCEL = 0x20000,
+    PL_HALT_WITH_EXCEPTION = 0x40000
+}
