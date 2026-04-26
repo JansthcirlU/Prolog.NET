@@ -6,6 +6,8 @@ namespace Prolog.NET.Swipl.Tests;
 
 public class SwiPrologTestFixture : IAsyncLifetime
 {
+    private PL_engine_t _fixtureEngine;
+
     public unsafe Task InitializeAsync()
     {
         // swipl check + Unix initialisation
@@ -29,11 +31,17 @@ public class SwiPrologTestFixture : IAsyncLifetime
             bool initialise = SwiProlog.PL_initialise(argc, argv);
             Debug.Assert(initialise, "SWI-Prolog failed to initialise.");
         }
+        _fixtureEngine = SwiProlog.PL_current_engine();
         return Task.CompletedTask;
     }
 
     public Task DisposeAsync()
     {
+        PL_engine_t e = SwiProlog.PL_current_engine();
+        if (e.handle == 0)
+        {
+            SwiProlog.PL_set_engine(_fixtureEngine, 0);
+        }
         PL_CLEANUP_RESULT cleanup = SwiProlog.PL_cleanup(PL_CLEANUP_STATUS_AND_FLAGS.PL_CLEANUP_NO_CANCEL);
         Debug.Assert(cleanup == PL_CLEANUP_RESULT.PL_CLEANUP_SUCCESS, "SWI-Prolog cleanup was not successful.");
         return Task.CompletedTask;
