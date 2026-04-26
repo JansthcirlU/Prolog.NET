@@ -25,7 +25,7 @@ internal static unsafe partial class SwiProlog
 }
 
 // Engine management
-internal static partial class SwiProlog
+internal static unsafe partial class SwiProlog
 {
     [LibraryImport("swipl", EntryPoint = "PL_current_engine")]
     internal static partial PL_engine_t PL_current_engine();
@@ -34,7 +34,7 @@ internal static partial class SwiProlog
     internal static partial PL_engine_t PL_create_engine(nint attributes);
 
     [LibraryImport("swipl", EntryPoint = "PL_create_engine")]
-    internal static partial PL_engine_t PL_create_engine(out PL_thread_attr_t attributes);
+    internal static partial PL_engine_t PL_create_engine(PL_thread_attr_t* attributes);
 
     [LibraryImport("swipl", EntryPoint = "PL_set_engine")]
     internal static partial PL_ENGINE_RESULT PL_set_engine(PL_engine_t engine, out PL_engine_t old);
