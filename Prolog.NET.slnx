@@ -4,9 +4,11 @@
     <Project Path="src/Prolog.NET.Model.Generator/Prolog.NET.Model.Generator.csproj" />
     <Project Path="src/Prolog.NET.Model/Prolog.NET.Model.csproj" />
     <Project Path="src/Prolog.NET.Swipl/Prolog.NET.Swipl.csproj" />
+    <Project Path="src/Prolog.NET.Threading/Prolog.NET.Threading.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Prolog.NET.Model.Tests/Prolog.NET.Model.Tests.csproj" />
     <Project Path="tests/Prolog.NET.Swipl.Tests/Prolog.NET.Swipl.Tests.csproj" />
+    <Project Path="tests/Prolog.NET.Threading.Tests/Prolog.NET.Threading.Tests.csproj" />
   </Folder>
 </Solution>
