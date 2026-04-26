@@ -1,5 +1,5 @@
-﻿using System.Diagnostics;
-using Prolog.NET.Swipl.C;
+﻿using Prolog.NET.Swipl.C;
+using Prolog.NET.Threading;
 
 namespace Prolog.NET.Swipl.Tests;
 
@@ -27,7 +27,7 @@ public sealed class SwiPrologTests : IClassFixture<SwiPrologTestFixture>
     }
 
     [Fact]
-    // Engine test: must call PL_destroy_engine at the end to ensure correct fixture disposal
+    // This test creates an engine: must call PL_destroy_engine at the end to ensure correct fixture disposal
     public void EngineLifecycle_WhenSingleThreaded_ShouldSucceed()
     {
         // Create engine
@@ -52,7 +52,7 @@ public sealed class SwiPrologTests : IClassFixture<SwiPrologTestFixture>
     }
 
     [Fact]
-    // Engine test: must call PL_destroy_engine at the end to ensure correct fixture disposal
+    // This test creates an engine: must call PL_destroy_engine at the end to ensure correct fixture disposal
     public void CreatedEngine_WhenDestroyedAfterSet_ShouldSucceed()
     {
         // Create engine
@@ -78,7 +78,7 @@ public sealed class SwiPrologTests : IClassFixture<SwiPrologTestFixture>
     }
 
     [Fact]
-    // Engine test: must call PL_destroy_engine at the end to ensure correct fixture disposal
+    // This test creates engines: must call PL_destroy_engine at the end to ensure correct fixture disposal
     public void TwoEngines_WhenSecondIsSet_ShouldReturnFirstHandle()
     {
         // Create and set first engine
@@ -100,5 +100,63 @@ public sealed class SwiPrologTests : IClassFixture<SwiPrologTestFixture>
         // Destroy both engines created during this test
         Assert.True(SwiProlog.PL_destroy_engine(firstEngine));
         Assert.True(SwiProlog.PL_destroy_engine(secondEngine));
+    }
+
+    [Fact]
+    public async Task TwoEngines_WhenSettingFromOtherThread_ShouldBeInUse()
+    {
+        // Create and attach first engine on a dedicated thread
+        ThreadWorker worker1 = new();
+        TaskCompletionSource<(PL_engine_t, PL_ENGINE_RESULT, int)> worker1Job1 = new();
+        worker1.AddJob(() =>
+        {
+            PL_engine_t e = SwiProlog.PL_create_engine(0);
+            PL_ENGINE_RESULT attached = SwiProlog.PL_set_engine(e, out _);
+            int tid = SwiProlog.PL_thread_self();
+            worker1Job1.SetResult((e, attached, tid));
+        });
+        PL_engine_t worker1Engine = PL_engine_t.PL_ENGINE_NONE;
+        PL_ENGINE_RESULT worker1Attached = PL_ENGINE_RESULT.PL_ENGINE_INVAL;
+        int worker1Thread = -1;
+        (worker1Engine, worker1Attached, worker1Thread) = await worker1Job1.Task;
+
+        // Try to attach and destroy the first engine from a different thread
+        ThreadWorker worker2 = new();
+        PL_ENGINE_RESULT worker2Attached = PL_ENGINE_RESULT.PL_ENGINE_SET;
+        bool worker2Destroyed = true;
+        int worker2Thread = 0xCAFE;
+        worker2.AddJob(() =>
+        {
+            worker2Attached = SwiProlog.PL_set_engine(worker1Engine, out _);
+            worker2Thread = SwiProlog.PL_thread_self();
+            worker2Destroyed = SwiProlog.PL_destroy_engine(worker1Engine);
+        });
+        worker2.Dispose();
+
+        // Detach and destroy first engine to ensure proper cleanup
+        PL_ENGINE_RESULT worker1Detached = PL_ENGINE_RESULT.PL_ENGINE_INVAL;
+        bool worker1Destroyed = false;
+        worker1.AddJob(() =>
+        {
+            worker1Detached = SwiProlog.PL_set_engine(worker1Engine, 0);
+            worker1Destroyed = SwiProlog.PL_destroy_engine(worker1Engine);
+        });
+        worker1.Dispose();
+
+        //// Assertions
+        
+        // Worker 1 create and set
+        Assert.NotEqual(-1, worker1Engine.handle);
+        Assert.Equal(PL_ENGINE_RESULT.PL_ENGINE_SET, worker1Attached);
+        Assert.NotEqual(-1, worker1Thread);
+
+        // Worker 2 set and destroy
+        Assert.Equal(PL_ENGINE_RESULT.PL_ENGINE_INUSE, worker2Attached);
+        Assert.False(worker2Destroyed);
+        Assert.Equal(-1, worker2Thread);
+
+        // Worker 1 detached and destroyed
+        Assert.Equal(PL_ENGINE_RESULT.PL_ENGINE_SET, worker1Detached);
+        Assert.True(worker1Destroyed);
     }
 }

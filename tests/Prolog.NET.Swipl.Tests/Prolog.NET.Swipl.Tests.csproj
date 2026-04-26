@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Prolog.NET.Swipl\Prolog.NET.Swipl.csproj" />
+    <ProjectReference Include="..\..\src\Prolog.NET.Threading\Prolog.NET.Threading.csproj" />
   </ItemGroup>
 
 </Project>
