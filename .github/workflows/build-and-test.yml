@@ -13,6 +13,7 @@ permissions:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+
     container:
       image: mcr.microsoft.com/dotnet/sdk:10.0
 
@@ -20,8 +21,61 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install SWI-Prolog
-        run: apt-get update && apt-get install -y swi-prolog
+      - name: Install SWI-Prolog from stable PPA
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            ca-certificates \
+            software-properties-common
+
+          apt-add-repository -y ppa:swi-prolog/stable
+          apt-get update
+
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            swi-prolog
+
+          swipl --version
+
+      - name: Export SWI-Prolog runtime paths
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          eval "$(swipl --dump-runtime-variables)"
+
+          SWIPL="$(command -v swipl)"
+          PLLIB_DIR="$(dirname "$PLLIBSWIPL")"
+
+          test -x "$SWIPL"
+          test -f "$PLLIBSWIPL"
+
+          {
+            echo "SWIPL=$SWIPL"
+            echo "SWIPL_EXE=$SWIPL"
+            echo "SWI_HOME_DIR=$PLBASE"
+            echo "PLBASE=$PLBASE"
+            echo "PLARCH=$PLARCH"
+            echo "PLLIBSWIPL=$PLLIBSWIPL"
+            echo "PLLIB_DIR=$PLLIB_DIR"
+          } >> "$GITHUB_ENV"
+
+          if [ -n "${PLSOPATH:-}" ]; then
+            CURRENT_VALUE="${!PLSOPATH:-}"
+
+            if [ -n "$CURRENT_VALUE" ]; then
+              echo "$PLSOPATH=$PLLIB_DIR:$CURRENT_VALUE" >> "$GITHUB_ENV"
+            else
+              echo "$PLSOPATH=$PLLIB_DIR" >> "$GITHUB_ENV"
+            fi
+          fi
+
+          echo "SWI-Prolog executable: $SWIPL"
+          echo "SWI-Prolog home:       $PLBASE"
+          echo "SWI-Prolog library:    $PLLIBSWIPL"
+          echo "Shared-library path:   ${PLSOPATH:-<none>}=$PLLIB_DIR"
 
       - name: Check formatting
         run: dotnet format --verify-no-changes
