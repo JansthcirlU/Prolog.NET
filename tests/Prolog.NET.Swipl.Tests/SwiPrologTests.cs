@@ -41,7 +41,7 @@ public sealed class SwiPrologTests : IClassFixture<SwiPrologTestFixture>
         Assert.NotEqual(-1, engineThread);
 
         // Detach the engine
-        PL_ENGINE_RESULT detached = SwiProlog.PL_set_engine(e, 0);
+        PL_ENGINE_RESULT detached = SwiProlog.PL_set_engine(PL_engine_t.NULL, 0);
         Assert.Equal(PL_ENGINE_RESULT.PL_ENGINE_SET, detached);
 
         // Destroy the engine (thread should be reset to -1)
@@ -53,7 +53,7 @@ public sealed class SwiPrologTests : IClassFixture<SwiPrologTestFixture>
 
     [Fact]
     // This test creates an engine: must call PL_destroy_engine at the end to ensure correct fixture disposal
-    public void CreatedEngine_WhenDestroyedAfterSet_ShouldSucceed()
+    public void CreatedEngine_WhenDestroyed_ShouldNotSet()
     {
         // Create engine
         PL_engine_t e = SwiProlog.PL_create_engine(0);
@@ -71,10 +71,14 @@ public sealed class SwiPrologTests : IClassFixture<SwiPrologTestFixture>
         int noThread = SwiProlog.PL_thread_self();
         Assert.Equal(-1, noThread);
 
-        // Detaching the engine should fail
-        PL_ENGINE_RESULT detached = SwiProlog.PL_set_engine(e, out PL_engine_t destroyedEngine);
-        Assert.Equal(PL_ENGINE_RESULT.PL_ENGINE_INVAL, detached);
+        // Setting the engine again should fail
+        PL_ENGINE_RESULT setAgain = SwiProlog.PL_set_engine(e, out PL_engine_t destroyedEngine);
+        Assert.Equal(PL_ENGINE_RESULT.PL_ENGINE_INVAL, setAgain);
         Assert.Equal(0, destroyedEngine.handle);
+
+        // Detaching should still succeed
+        PL_ENGINE_RESULT detached = SwiProlog.PL_set_engine(PL_engine_t.NULL, out _);
+        Assert.Equal(PL_ENGINE_RESULT.PL_ENGINE_SET, detached);
     }
 
     [Fact]
@@ -138,7 +142,7 @@ public sealed class SwiPrologTests : IClassFixture<SwiPrologTestFixture>
         bool worker1Destroyed = false;
         worker1.AddJob(() =>
         {
-            worker1Detached = SwiProlog.PL_set_engine(worker1Engine, 0);
+            worker1Detached = SwiProlog.PL_set_engine(PL_engine_t.NULL, out _);
             worker1Destroyed = SwiProlog.PL_destroy_engine(worker1Engine);
         });
         worker1.Dispose();
