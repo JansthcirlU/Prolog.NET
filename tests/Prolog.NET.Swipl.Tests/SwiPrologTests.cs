@@ -177,7 +177,7 @@ public sealed class SwiPrologTests : IClassFixture<SwiPrologTestFixture>
         worker1.Dispose();
 
         //// Assertions
-        
+
         // Worker 1 create and set
         Assert.NotEqual(-1, worker1Engine.handle);
         Assert.Equal(PL_ENGINE_RESULT.PL_ENGINE_SET, worker1Attached);

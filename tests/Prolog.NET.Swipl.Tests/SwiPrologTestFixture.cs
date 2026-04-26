@@ -7,7 +7,7 @@ namespace Prolog.NET.Swipl.Tests;
 public class SwiPrologTestFixture : IAsyncLifetime
 {
     private PL_engine_t _fixtureEngine;
-    
+
     public unsafe Task InitializeAsync()
     {
         // swipl check + Unix initialisation
