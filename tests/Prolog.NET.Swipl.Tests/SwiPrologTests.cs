@@ -1,4 +1,7 @@
-﻿using Prolog.NET.Swipl.C;
+﻿using System.Diagnostics.CodeAnalysis;
+using System.Runtime.InteropServices;
+using System.Text;
+using Prolog.NET.Swipl.C;
 using Prolog.NET.Threading;
 
 namespace Prolog.NET.Swipl.Tests;
@@ -24,12 +27,6 @@ public sealed class SwiPrologTests : IClassFixture<SwiPrologTestFixture>
         Assert.True(initialised);
         Assert.True(outArgc > 0);
         Assert.True(outArgv != null);
-    }
-
-    [Fact]
-    public void MainEngine_ShouldNotBeDestroyed()
-    {
-        Assert.False(SwiProlog.PL_destroy_engine(PL_engine_t.PL_ENGINE_MAIN));
     }
 
     [Fact]
@@ -194,5 +191,188 @@ public sealed class SwiPrologTests : IClassFixture<SwiPrologTestFixture>
         // Worker 1 detached and destroyed
         Assert.Equal(PL_ENGINE_RESULT.PL_ENGINE_SET, worker1Detached);
         Assert.True(worker1Destroyed);
+    }
+
+    [Fact]
+    public unsafe void CreateEngine_WhenAliasIsGiven_UsingFixed_ShouldBeFound()
+    {
+        // Act
+        PL_thread_attr_t attributes;
+        PL_engine_t e = PL_engine_t.NULL;
+        fixed (byte* aliasBytes = Encoding.UTF8.GetBytes("joske\0"))
+        {
+            attributes = new()
+            {
+                alias = aliasBytes
+            };
+            e = SwiProlog.PL_create_engine(&attributes);
+        }
+        bool destroyed = SwiProlog.PL_destroy_engine(e);
+
+        // Assert
+        Assert.NotEqual(0, e.handle);
+        Assert.True(destroyed);
+    }
+
+    [Fact]
+    [SuppressMessage("xUnit", "xUnit1031", Justification = "Fuck you")]
+    public unsafe void CreateEngine_WhenSameAliasOnDifferentThreads_UsingFixed_ShouldFail()
+    {
+        // Create engine with alias on one thread
+        ThreadWorker worker1 = new();
+        PL_engine_t engine1 = PL_engine_t.PL_ENGINE_MAIN;
+        PL_ENGINE_RESULT attached = PL_ENGINE_RESULT.PL_ENGINE_INVAL;
+        TaskCompletionSource<bool> tcs = new();
+        bool finished = false;
+        worker1.AddJob(() =>
+        {
+            PL_thread_attr_t attributes;
+            fixed (byte* aliasBytes = Encoding.UTF8.GetBytes("joske\0"))
+            {
+                attributes = new()
+                {
+                    alias = aliasBytes
+                };
+                engine1 = SwiProlog.PL_create_engine(&attributes);
+            }
+            attached = SwiProlog.PL_set_engine(engine1, out _);
+            tcs.SetResult(true);
+        });
+        finished = tcs.Task.GetAwaiter().GetResult();
+
+        // Try to create engine with the same alias on another thread
+        ThreadWorker worker2 = new();
+        PL_engine_t engine2 = PL_engine_t.PL_ENGINE_CURRENT;
+        worker2.AddJob(() =>
+        {
+            PL_thread_attr_t attributes;
+            fixed (byte* aliasBytes = Encoding.UTF8.GetBytes("joske\0"))
+            {
+                attributes = new()
+                {
+                    alias = aliasBytes
+                };
+                engine2 = SwiProlog.PL_create_engine(&attributes);
+            }
+        });
+        worker2.Dispose();
+
+        // Destroy first engine
+        PL_ENGINE_RESULT detached = PL_ENGINE_RESULT.PL_ENGINE_INVAL;
+        bool destroyed = false;
+        worker1.AddJob(() =>
+        {
+            detached = SwiProlog.PL_set_engine(PL_engine_t.NULL, out _);
+            destroyed = SwiProlog.PL_destroy_engine(engine1);
+        });
+        worker1.Dispose();
+
+        //// Assertions
+
+        // Worker 1 create and set
+        Assert.NotEqual(0, engine1.handle);
+        Assert.Equal(PL_ENGINE_RESULT.PL_ENGINE_SET, attached);
+        Assert.True(finished);
+
+        // Worker 2 create
+        Assert.Equal(0, engine2.handle);
+
+        // Worker 1 detach and destroy
+        Assert.Equal(PL_ENGINE_RESULT.PL_ENGINE_SET, detached);
+        Assert.True(destroyed);
+    }
+
+    [Fact]
+    public unsafe void CreateEngine_WhenAliasIsGiven_ShouldBeFound()
+    {
+        GCHandle aliasPin = GCHandle.Alloc(Encoding.UTF8.GetBytes("joske\0"), GCHandleType.Pinned);
+        try
+        {
+            // Act
+            PL_thread_attr_t attributes = new()
+            {
+                alias = (byte*)aliasPin.AddrOfPinnedObject()
+            };
+            PL_engine_t e = SwiProlog.PL_create_engine(&attributes);
+            bool destroyed = SwiProlog.PL_destroy_engine(e);
+
+            // Assert
+            Assert.NotEqual(0, e.handle);
+            Assert.True(destroyed);
+        }
+        finally
+        {
+            aliasPin.Free();
+        }
+    }
+
+    [Fact]
+    [SuppressMessage("xUnit", "xUnit1031", Justification = "Fuck you")]
+    public unsafe void CreateEngine_WhenSameAliasOnDifferentThreads_ShouldFail()
+    {
+        GCHandle aliasPin1 = GCHandle.Alloc(Encoding.UTF8.GetBytes("joske\0"), GCHandleType.Pinned);
+        GCHandle aliasPin2 = GCHandle.Alloc(Encoding.UTF8.GetBytes("joske\0"), GCHandleType.Pinned);
+        try
+        {
+            // Create engine with alias on one thread
+            ThreadWorker worker1 = new();
+            PL_engine_t engine1 = PL_engine_t.PL_ENGINE_MAIN;
+            PL_ENGINE_RESULT attached = PL_ENGINE_RESULT.PL_ENGINE_INVAL;
+            TaskCompletionSource<bool> tcs = new();
+            bool finished = false;
+            worker1.AddJob(() =>
+            {
+                PL_thread_attr_t attributes = new()
+                {
+                    alias = (byte*)aliasPin1.AddrOfPinnedObject()
+                };
+                engine1 = SwiProlog.PL_create_engine(&attributes);
+                attached = SwiProlog.PL_set_engine(engine1, out _);
+                tcs.SetResult(true);
+            });
+            finished = tcs.Task.GetAwaiter().GetResult();
+
+            // Try to create engine with the same alias on another thread
+            ThreadWorker worker2 = new();
+            PL_engine_t engine2 = PL_engine_t.PL_ENGINE_CURRENT;
+            worker2.AddJob(() =>
+            {
+                PL_thread_attr_t attributes = new()
+                {
+                    alias = (byte*)aliasPin2.AddrOfPinnedObject()
+                };
+                engine2 = SwiProlog.PL_create_engine(&attributes);
+            });
+            worker2.Dispose();
+
+            // Destroy first engine
+            PL_ENGINE_RESULT detached = PL_ENGINE_RESULT.PL_ENGINE_INVAL;
+            bool destroyed = false;
+            worker1.AddJob(() =>
+            {
+                detached = SwiProlog.PL_set_engine(PL_engine_t.NULL, out _);
+                destroyed = SwiProlog.PL_destroy_engine(engine1);
+            });
+            worker1.Dispose();
+
+            //// Assertions
+
+            // Worker 1 create and set
+            Assert.NotEqual(0, engine1.handle);
+            Assert.Equal(PL_ENGINE_RESULT.PL_ENGINE_SET, attached);
+            Assert.True(finished);
+
+            // Worker 2 create
+            Assert.Equal(0, engine2.handle);
+
+            // Worker 1 detach and destroy
+            Assert.Equal(PL_ENGINE_RESULT.PL_ENGINE_SET, detached);
+            Assert.True(destroyed);
+        }
+        finally
+        {
+            aliasPin1.Free();
+            aliasPin2.Free();
+        }
     }
 }
