@@ -27,6 +27,12 @@ public sealed class SwiPrologTests : IClassFixture<SwiPrologTestFixture>
     }
 
     [Fact]
+    public void MainEngine_ShouldNotBeDestroyed()
+    {
+        Assert.False(SwiProlog.PL_destroy_engine(PL_engine_t.PL_ENGINE_MAIN));
+    }
+
+    [Fact]
     // This test creates an engine: must call PL_destroy_engine at the end to ensure correct fixture disposal
     public void EngineLifecycle_WhenSingleThreaded_ShouldSucceed()
     {
@@ -79,6 +85,32 @@ public sealed class SwiPrologTests : IClassFixture<SwiPrologTestFixture>
         // Detaching should still succeed
         PL_ENGINE_RESULT detached = SwiProlog.PL_set_engine(PL_engine_t.NULL, out _);
         Assert.Equal(PL_ENGINE_RESULT.PL_ENGINE_SET, detached);
+    }
+
+    [Fact]
+    // This test creates an engine: must call PL_destroy_engine at the end to ensure correct fixture disposal
+    public void CreatedEngine_WhenSetMultipleTimes_ShouldBeIdempotent()
+    {
+        // Create engine
+        PL_engine_t e = SwiProlog.PL_create_engine(0);
+
+        // Set engine for the first time
+        PL_ENGINE_RESULT set1 = SwiProlog.PL_set_engine(e, out _);
+        PL_ENGINE_RESULT set2 = SwiProlog.PL_set_engine(e, out PL_engine_t previous);
+
+        // Detach and destroy engine
+        PL_ENGINE_RESULT detached = SwiProlog.PL_set_engine(PL_engine_t.NULL, out PL_engine_t old);
+        bool destroyed = SwiProlog.PL_destroy_engine(old);
+        PL_engine_t current = SwiProlog.PL_current_engine();
+
+        // Assert
+        Assert.Equal(PL_ENGINE_RESULT.PL_ENGINE_SET, set1);
+        Assert.Equal(PL_ENGINE_RESULT.PL_ENGINE_SET, set2);
+        Assert.Equal(e.handle, previous.handle);
+        Assert.Equal(PL_ENGINE_RESULT.PL_ENGINE_SET, detached);
+        Assert.Equal(e.handle, old.handle);
+        Assert.True(destroyed);
+        Assert.Equal(0, current.handle);
     }
 
     [Fact]
