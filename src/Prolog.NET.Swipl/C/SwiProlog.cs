@@ -1,5 +1,6 @@
 ﻿using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Prolog.NET.Swipl.C.stddef;
 
 [assembly: InternalsVisibleTo("Prolog.NET.Swipl.Tests")]
 namespace Prolog.NET.Swipl.C;
@@ -52,4 +53,38 @@ internal static partial class SwiProlog
 {
     [LibraryImport("swipl", EntryPoint = "PL_thread_self")]
     internal static partial int PL_thread_self();
+}
+
+// Terms
+internal static unsafe partial class SwiProlog
+{
+    [LibraryImport("swipl", EntryPoint = "PL_new_term_refs")]
+    internal static partial term_t PL_new_term_refs(size_t n);
+
+    [LibraryImport("swipl", EntryPoint = "PL_put_atom_chars")]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static partial bool PL_put_atom_chars(term_t t, byte* chars);
+}
+
+// Predicates
+internal static unsafe partial class SwiProlog
+{
+    [LibraryImport("swipl", EntryPoint = "PL_predicate")]
+    internal static partial predicate_t PL_predicate(byte* name, int arity, byte* module);
+}
+
+// Queries
+internal static partial class SwiProlog
+{
+    [LibraryImport("swipl", EntryPoint = "PL_open_query")]
+    internal static partial qid_t PL_open_query(module_t m, PL_Q_FLAGS flags, predicate_t pred, term_t t0);
+
+    [LibraryImport("swipl", EntryPoint = "PL_next_solution")]
+    internal static partial PL_Q_EXT_STATUS PL_next_solution(qid_t qid);
+
+    [LibraryImport("swipl", EntryPoint = "PL_close_query")]
+    internal static partial PL_Q_EXT_STATUS PL_close_query(qid_t qid);
+
+    [LibraryImport("swipl", EntryPoint = "PL_exception")]
+    internal static partial term_t PL_exception(qid_t qid);
 }
